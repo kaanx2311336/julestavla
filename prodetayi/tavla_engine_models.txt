@@ -1,0 +1,8 @@
+TavlaJules kural motoru icin olusturulan modeller (src/TavlaJules.Engine/Models altinda):
+- PlayerColor.cs: None, White, Black.
+- Point.cs: Index, Color, CheckerCount propertylerine sahip hane sinifi.
+- Board.cs: Klasik tavla tahtasini modelleyen ve baslangic dizilimini InitializeStartingPosition metodu ile yapan sinif.
+- TavlaJules.Engine ve TavlaJules.Engine.Tests projeleri repo SDK'siyle uyumlu `net9.0` hedefler.
+
+Testler (src/TavlaJules.Engine.Tests/Models altinda):
+- BoardTests.cs: Board yaratildiginda Siyah ve Beyaz icin dogru hanelere dogru pul sayisinin konuldugunu test eden dogrulama sinifi.

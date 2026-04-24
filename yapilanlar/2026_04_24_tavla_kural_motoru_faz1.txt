@@ -1,0 +1,5 @@
+2026-04-24:
+TavlaJules kontrol paneline tavla kural motoru eklendi.
+TavlaJules.Engine ve TavlaJules.Engine.Tests projeleri oluşturuldu. 
+Baslangic durumu icin (15 pul, 24 hane) PlayerColor, Point ve Board siniflari tanimlanarak baslangic ayarlari testleri (Board_Constructor_InitializesCorrectStartingPosition) eklendi ve testler gecti. Eski Batak kodlarindan tamamen ayrildi.
+Projeler mevcut .NET SDK ile uyumlu olacak sekilde `net9.0` hedeflemektedir.
