@@ -1,0 +1,11 @@
+# 2026-04-24 - GameEngine Turn & Dice Capabilities Added
+
+- Confirmed that `RollDice(Random?)` allows determining two dice outputs.
+- Confirmed `StartTurn(PlayerColor, die1, die2)` sets `CurrentTurn`, validates dice bounds 1..6, and populates remaining move dice, resolving doubles into four dice.
+- Verified encapsulation with `IReadOnlyList<int> RemainingDice` and `bool IsTurnComplete`.
+- Verified `ApplyMove(Move move)` seamlessly uses `CurrentTurn` and `RemainingDice`, validating via `MoveValidator`, applying existing move functionality, and only flipping turns upon total dice consumption.
+- Kept the previous `ApplyMove(Move move, PlayerColor player)` interface for compatibility checks.
+- Verified `void AdvanceTurn()` flushes dice appropriately and flips active player context safely.
+- Verified `GenerateLegalMoves(PlayerColor player)` strictly evaluates potential moves utilizing board scanning and `MoveValidator`.
+- All respective tests implemented in `GameEngineTests.cs`.
+- Re-run `DOTNET_ROLL_FORWARD=Major dotnet test src/TavlaJules.Engine.Tests/TavlaJules.Engine.Tests.csproj` and passed perfectly.
