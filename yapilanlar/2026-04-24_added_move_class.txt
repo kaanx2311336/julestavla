@@ -1,0 +1,6 @@
+# 2026-04-24: Added Move Class and Tests
+
+- Created `Move` class in `src/TavlaJules.Engine/Models/Move.cs`.
+  - Properties: `SourcePoint`, `DestinationPoint`, `CheckerCount`, `IsHit`.
+- Created corresponding unit tests in `src/TavlaJules.Engine.Tests/Models/MoveTests.cs`.
+- Verified the model state via TDD approach.
