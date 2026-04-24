@@ -12,6 +12,7 @@ public class GameEngine
     public Board Board { get; private set; }
     private readonly MoveValidator _moveValidator;
     public PlayerColor CurrentTurn { get; private set; }
+    public int TurnNumber { get; private set; } = 1;
 
     private List<int> _remainingDice = new List<int>();
     public IReadOnlyList<int> RemainingDice => _remainingDice.AsReadOnly();
@@ -68,6 +69,7 @@ public class GameEngine
     {
         _remainingDice.Clear();
         CurrentTurn = CurrentTurn == PlayerColor.White ? PlayerColor.Black : PlayerColor.White;
+        TurnNumber++;
     }
 
     public bool ApplyMove(Move move)
@@ -400,5 +402,24 @@ public class GameEngine
         CurrentTurn = player == PlayerColor.White ? PlayerColor.Black : PlayerColor.White;
 
         return true;
+    }
+
+    public static GameStateSnapshot CaptureGameStateSnapshot(GameEngine engine)
+    {
+        var points = engine.Board.Points
+            .Where(p => p != null && p.Index >= 1 && p.Index <= 24)
+            .Select(p => new PointSnapshot(p.Index, p.Color, p.CheckerCount))
+            .ToList();
+
+        return new GameStateSnapshot(
+            points.AsReadOnly(),
+            engine.Board.WhiteCheckersOnBar,
+            engine.Board.BlackCheckersOnBar,
+            engine.Board.WhiteCheckersBorneOff,
+            engine.Board.BlackCheckersBorneOff,
+            engine.CurrentTurn,
+            engine.RemainingDice.ToList().AsReadOnly(),
+            engine.TurnNumber
+        );
     }
 }
