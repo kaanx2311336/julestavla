@@ -1,0 +1,1 @@
+- `MoveValidator.cs`: Defines the `MoveValidator` class. Handles the logic for validating whether a `Move` is legal according to backgammon rules given a `Board` state, player color, and dice roll. Handles normal moves, hits, blocked points, moving from the bar, and bearing off.

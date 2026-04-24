@@ -1,0 +1,10 @@
+2026-04-24 18:04
+
+TavlaJules engine validation logic added for move validation.
+
+- Created `MoveValidator` class in `src/TavlaJules.Engine/Validation/MoveValidator.cs`.
+- Implemented `IsValidMove` to check basic constraints, bar constraints, movement direction/distance, and point occupancy (blocks/hits).
+- Implemented bearing off logic in `IsValidMove`.
+- Created comprehensive unit tests in `src/TavlaJules.Engine.Tests/Validation/MoveValidatorTests.cs`.
+- Tests include valid/invalid scenarios, hit validations, blocks, bar entry, backwards move attempts, and bearing off.
+- All tests pass successfully under .NET SDK using `DOTNET_ROLL_FORWARD=Major`.

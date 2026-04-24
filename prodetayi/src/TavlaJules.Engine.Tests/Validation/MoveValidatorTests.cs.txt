@@ -1,0 +1,1 @@
+- `MoveValidatorTests.cs`: Unit tests for `MoveValidator`. Contains tests for valid and invalid normal moves, hits, blocked paths, incorrect player moves, bar entry, backwards moves, and bearing off logic.
