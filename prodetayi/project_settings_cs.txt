@@ -13,4 +13,7 @@
 - `TrackedJulesSessionId`: dakika basi izlenecek Jules session ID.
 - `AllowAutoJulesSessions`: true olursa ajan, modelin onerisine gore yeni Jules session acabilir.
 - `AutoContinueCompletedSessions`: true olursa izlenen Jules session tamamlandiginda ajan tek seferlik devam session'i acar; varsayilan true.
+- `AutoApplyCompletedSessionPatch`: completed Jules patch'ini otomatik apply etmeyi kontrol eder; varsayilan true.
+- `AutoCommitAndPushAppliedChanges`: dogrulanmis patch'i staged secret scan sonrasinda commit/push etmeyi kontrol eder; varsayilan true.
+- `AutoRunVerification`: apply sonrasinda `dotnet build` ve `dotnet test` calistirir; UI'da apply secenegiyle birlikte yonetilir.
 - `Goal`: projenin genel hedef metni.

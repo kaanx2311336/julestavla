@@ -15,6 +15,9 @@ public sealed class ProjectSettings
     public string TrackedJulesSessionId { get; set; } = "14009672719483814558";
     public bool AllowAutoJulesSessions { get; set; }
     public bool AutoContinueCompletedSessions { get; set; } = true;
+    public bool AutoApplyCompletedSessionPatch { get; set; } = true;
+    public bool AutoCommitAndPushAppliedChanges { get; set; } = true;
+    public bool AutoRunVerification { get; set; } = true;
     public string Goal { get; set; } =
         "Jules ile telefon icin tavla uygulamasi yaptiran, OpenRouter uzerinden AI kontrol raporu alan ve fazlari takip eden masaustu kontrol paneli.";
 }

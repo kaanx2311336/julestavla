@@ -25,6 +25,8 @@ public sealed class MainForm : Form
     private readonly TextBox dbConnectionTextBox = new();
     private readonly CheckBox autoJulesCheckBox = new();
     private readonly CheckBox autoContinueCheckBox = new();
+    private readonly CheckBox autoApplyCheckBox = new();
+    private readonly CheckBox autoCommitCheckBox = new();
     private readonly TextBox goalTextBox = new();
     private readonly TextBox julesPromptTextBox = new();
     private readonly ListView phaseListView = new();
@@ -280,12 +282,14 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 4,
+            RowCount = 6,
             BackColor = Color.Transparent
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
@@ -308,6 +312,14 @@ public sealed class MainForm : Form
         autoContinueCheckBox.BackColor = Color.Transparent;
         layout.SetColumnSpan(autoContinueCheckBox, 2);
         layout.Controls.Add(autoContinueCheckBox, 0, 2);
+
+        ConfigureCheckBox(autoApplyCheckBox, "Completed patch'i uygula ve dogrula");
+        layout.SetColumnSpan(autoApplyCheckBox, 2);
+        layout.Controls.Add(autoApplyCheckBox, 0, 3);
+
+        ConfigureCheckBox(autoCommitCheckBox, "Dogrulanan degisiklikleri commit/push yap");
+        layout.SetColumnSpan(autoCommitCheckBox, 2);
+        layout.Controls.Add(autoCommitCheckBox, 0, 4);
 
         var buttons = new TableLayoutPanel
         {
@@ -334,9 +346,17 @@ public sealed class MainForm : Form
         buttons.Controls.Add(CreateButton("Ajan tek tur", async (_, _) => await RunAgentOnceAsync()), 1, 0);
         buttons.Controls.Add(CreateButton("DB test", async (_, _) => await TestDatabaseAsync()), 2, 0);
         layout.SetColumnSpan(buttons, 2);
-        layout.Controls.Add(buttons, 0, 3);
+        layout.Controls.Add(buttons, 0, 5);
 
         return layout;
+    }
+
+    private static void ConfigureCheckBox(CheckBox checkBox, string text)
+    {
+        checkBox.Dock = DockStyle.Fill;
+        checkBox.Text = text;
+        checkBox.ForeColor = Color.FromArgb(162, 176, 205);
+        checkBox.BackColor = Color.Transparent;
     }
 
     private Control BuildStatusBar()
@@ -486,6 +506,8 @@ public sealed class MainForm : Form
         sessionIdTextBox.Text = settings.TrackedJulesSessionId;
         autoJulesCheckBox.Checked = settings.AllowAutoJulesSessions;
         autoContinueCheckBox.Checked = settings.AutoContinueCompletedSessions;
+        autoApplyCheckBox.Checked = settings.AutoApplyCompletedSessionPatch;
+        autoCommitCheckBox.Checked = settings.AutoCommitAndPushAppliedChanges;
         goalTextBox.Text = settings.Goal;
         UpdateApiKeyPlaceholder();
         UpdateDatabasePlaceholder();
@@ -502,6 +524,9 @@ public sealed class MainForm : Form
         settings.TrackedJulesSessionId = sessionIdTextBox.Text.Trim();
         settings.AllowAutoJulesSessions = autoJulesCheckBox.Checked;
         settings.AutoContinueCompletedSessions = autoContinueCheckBox.Checked;
+        settings.AutoApplyCompletedSessionPatch = autoApplyCheckBox.Checked;
+        settings.AutoCommitAndPushAppliedChanges = autoCommitCheckBox.Checked;
+        settings.AutoRunVerification = autoApplyCheckBox.Checked;
         settings.Goal = goalTextBox.Text.Trim();
     }
 
@@ -703,6 +728,11 @@ public sealed class MainForm : Form
             if (result.AutoJulesSessionResult is not null)
             {
                 AppendCommandResult("Ajan otomatik Jules gorevi", result.AutoJulesSessionResult);
+            }
+
+            if (!string.IsNullOrWhiteSpace(result.Automation.Summary))
+            {
+                AppendLog($"Otonom ozet: {result.Automation.Summary}");
             }
 
             if (!string.IsNullOrWhiteSpace(result.NewJulesSessionId))

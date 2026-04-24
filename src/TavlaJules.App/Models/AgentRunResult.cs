@@ -11,5 +11,6 @@ public sealed class AgentRunResult
     public string? PullOutput { get; init; }
     public string SqlReportMessage { get; init; } = "";
     public string NewJulesSessionId { get; init; } = "";
+    public AgentAutomationArtifacts Automation { get; init; } = new();
     public CommandResult? AutoJulesSessionResult { get; init; }
 }

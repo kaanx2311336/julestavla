@@ -12,6 +12,7 @@ public sealed class TavlaAgentService
     private readonly AgentSqlReporter agentSqlReporter = new();
     private readonly AgentDashboardExporter dashboardExporter = new();
     private readonly AgentStateService agentStateService = new();
+    private readonly WorkspaceAutomationService workspaceAutomationService = new();
 
     public async Task<AgentRunResult> RunOnceAsync(
         ProjectSettings settings,
@@ -32,8 +33,9 @@ public sealed class TavlaAgentService
             events.Add(CreateEvent("jules_sessions_read", "info", "Jules session listesi okundu.", new { exitCode = sessions.ExitCode }));
             var trackedSessionIdAtStart = settings.TrackedJulesSessionId;
             var relevantSessionsOutput = FilterRelevantSessions(sessions.Output, settings);
+            var automation = await ProcessTrackedCompletedSessionAsync(settings, trackedSessionIdAtStart, relevantSessionsOutput, events, cancellationToken);
+            var pullOutput = SelectPullOutput(automation);
 
-            var pullOutput = await TryPullTrackedSessionAsync(settings, relevantSessionsOutput, events, cancellationToken);
             var databaseHealth = await databaseHealthService.TestAsync(databaseConnectionString, cancellationToken);
             events.Add(CreateEvent(
                 "database_health_checked",
@@ -41,7 +43,7 @@ public sealed class TavlaAgentService
                 databaseHealth.Message,
                 new { databaseHealth.IsConfigured, databaseHealth.IsSuccess, databaseHealth.TableCount }));
 
-            var projectContext = BuildProjectContext(settings, relevantSessionsOutput, pullOutput, databaseHealth);
+            var projectContext = BuildProjectContext(settings, relevantSessionsOutput, pullOutput, databaseHealth, automation);
             OpenRouterCompletionResult completion;
 
             try
@@ -63,9 +65,9 @@ public sealed class TavlaAgentService
 
             var nextPrompt = ExtractString(completion.Content, "nextPrompt");
             var shouldStart = ExtractBool(completion.Content, "shouldStartNewJulesSession");
-            var trackedSessionCompleted = IsTrackedSessionCompleted(relevantSessionsOutput, trackedSessionIdAtStart);
             var shouldContinueCompletedSession = settings.AutoContinueCompletedSessions
-                && trackedSessionCompleted
+                && automation.TrackedSessionCompleted
+                && !automation.AutomationBlocked
                 && !agentStateService.HasHandledCompletedSession(settings, trackedSessionIdAtStart);
             CommandResult? autoResult = null;
             var newJulesSessionId = "";
@@ -91,22 +93,23 @@ public sealed class TavlaAgentService
                     "Ajan otomatik Jules session denemesi yapti.",
                     new { autoResult.ExitCode, continuedFromSessionId = trackedSessionIdAtStart, newJulesSessionId, shouldContinueCompletedSession }));
             }
-            else if (trackedSessionCompleted && !shouldContinueCompletedSession)
+            else if (automation.TrackedSessionCompleted && !shouldContinueCompletedSession)
             {
                 events.Add(CreateEvent(
                     "completed_session_already_handled",
                     "info",
-                    "Izlenen completed Jules session daha once devam ettirildi veya otomatik devam kapali.",
-                    new { trackedSessionIdAtStart, settings.AutoContinueCompletedSessions }));
+                    "Izlenen completed Jules session daha once devam ettirildi, otomatik devam kapali veya otomasyon bloklandi.",
+                    new { trackedSessionIdAtStart, settings.AutoContinueCompletedSessions, automation.AutomationBlocked }));
             }
             else
             {
                 events.Add(CreateEvent("next_prompt_prepared", "info", "Ajan sonraki Jules promptunu hazirladi; otomatik session acilmadi.", new { shouldStart, settings.AllowAutoJulesSessions }));
             }
 
-            var reportPath = SaveReport(settings, completion, relevantSessionsOutput, pullOutput, databaseHealth, autoResult);
+            var reportPath = SaveReport(settings, completion, relevantSessionsOutput, pullOutput, databaseHealth, autoResult, automation);
             var completedAt = DateTimeOffset.Now;
-            var sqlReport = BuildSqlReport(settings, runUuid, startedAt, completedAt, "completed", completion, relevantSessionsOutput, reportPath, "");
+            var runStatus = automation.AutomationBlocked ? "blocked" : "completed";
+            var sqlReport = BuildSqlReport(settings, runUuid, startedAt, completedAt, runStatus, completion, relevantSessionsOutput, reportPath, "");
             var sqlMessage = await TryWriteSqlReportAsync(databaseConnectionString, settings, sqlReport, events, cancellationToken);
             dashboardExporter.Export(settings, completion, reportPath, sqlMessage, relevantSessionsOutput, pullOutput, events);
 
@@ -121,6 +124,7 @@ public sealed class TavlaAgentService
                 PullOutput = pullOutput,
                 SqlReportMessage = sqlMessage,
                 NewJulesSessionId = newJulesSessionId,
+                Automation = automation,
                 AutoJulesSessionResult = autoResult
             };
         }
@@ -141,7 +145,7 @@ public sealed class TavlaAgentService
                     riskNotes = new[] { exception.Message }
                 })
             };
-            var failurePath = SaveReport(settings, failureCompletion, "", null, new DatabaseHealthResult { Message = "Ajan turu hata ile bitti." }, null);
+            var failurePath = SaveReport(settings, failureCompletion, "", null, new DatabaseHealthResult { Message = "Ajan turu hata ile bitti." }, null, new AgentAutomationArtifacts { Summary = exception.Message, AutomationBlocked = true });
             var sqlReport = BuildSqlReport(settings, runUuid, startedAt, completedAt, "failed", failureCompletion, "", failurePath, exception.Message);
             var sqlMessage = await TryWriteSqlReportAsync(databaseConnectionString, settings, sqlReport, events, cancellationToken);
             dashboardExporter.Export(settings, failureCompletion, failurePath, sqlMessage, "", null, events);
@@ -149,26 +153,158 @@ public sealed class TavlaAgentService
         }
     }
 
-    private async Task<string?> TryPullTrackedSessionAsync(ProjectSettings settings, string sessionsOutput, List<AgentEvent> events, CancellationToken cancellationToken)
+    private async Task<AgentAutomationArtifacts> ProcessTrackedCompletedSessionAsync(
+        ProjectSettings settings,
+        string trackedSessionId,
+        string sessionsOutput,
+        List<AgentEvent> events,
+        CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(settings.TrackedJulesSessionId))
+        var automation = new AgentAutomationArtifacts
+        {
+            TrackedSessionCompleted = IsTrackedSessionCompleted(sessionsOutput, trackedSessionId)
+        };
+
+        if (string.IsNullOrWhiteSpace(trackedSessionId))
+        {
+            automation.Summary = "Izlenen Jules session id bos; otomasyon beklemede.";
+            return automation;
+        }
+
+        if (!sessionsOutput.Contains(trackedSessionId, StringComparison.Ordinal))
+        {
+            automation.Summary = "Izlenen Jules session listede bulunamadi; otomasyon beklemede.";
+            return automation;
+        }
+
+        if (!automation.TrackedSessionCompleted)
+        {
+            automation.Summary = "Izlenen Jules session henuz tamamlanmadi; ajan durum raporu uretir ve bekler.";
+            return automation;
+        }
+
+        if (!settings.AutoApplyCompletedSessionPatch)
+        {
+            automation.JulesPullResult = await julesCliService.PullSessionAsync(settings, trackedSessionId, apply: false, cancellationToken);
+            automation.Summary = "Completed Jules session pull edildi, fakat otomatik apply kapali.";
+            events.Add(CreateEvent("jules_session_pulled", automation.JulesPullResult.IsSuccess ? "info" : "error", "Izlenen Jules session pull sonucu alindi.", new { trackedSessionId, automation.JulesPullResult.ExitCode, apply = false }));
+            return automation;
+        }
+
+        if (agentStateService.HasAppliedCompletedSession(settings, trackedSessionId))
+        {
+            automation.AlreadyApplied = true;
+            automation.JulesPullResult = await julesCliService.PullSessionAsync(settings, trackedSessionId, apply: false, cancellationToken);
+            automation.Summary = "Completed Jules session daha once apply edildi; tekrar uygulanmadi.";
+            events.Add(CreateEvent("jules_session_already_applied", "info", "Izlenen completed Jules session daha once apply edilmis.", new { trackedSessionId }));
+            return automation;
+        }
+
+        automation.GitStatusBeforeApply = await workspaceAutomationService.GetGitStatusAsync(settings, cancellationToken);
+        events.Add(CreateEvent("git_status_before_apply", automation.GitStatusBeforeApply.IsSuccess ? "info" : "error", "Apply oncesi git durumu okundu.", new { automation.GitStatusBeforeApply.ExitCode, isClean = WorkspaceAutomationService.IsCleanStatus(automation.GitStatusBeforeApply) }));
+
+        if (!WorkspaceAutomationService.IsCleanStatus(automation.GitStatusBeforeApply))
+        {
+            automation.AutomationBlocked = true;
+            automation.JulesPullResult = await julesCliService.PullSessionAsync(settings, trackedSessionId, apply: false, cancellationToken);
+            automation.Summary = "Calisma alani temiz olmadigi icin completed Jules patch'i otomatik uygulanmadi.";
+            events.Add(CreateEvent("auto_apply_blocked_dirty_workspace", "warning", "Calisma alani temiz degil; otomatik apply durduruldu.", new { trackedSessionId, status = Trim(automation.GitStatusBeforeApply.Output + automation.GitStatusBeforeApply.Error, 1200) }));
+            return automation;
+        }
+
+        automation.JulesApplyResult = await julesCliService.PullSessionAsync(settings, trackedSessionId, apply: true, cancellationToken);
+        automation.AppliedThisTurn = automation.JulesApplyResult.IsSuccess;
+        automation.AutomationBlocked = !automation.JulesApplyResult.IsSuccess;
+        events.Add(CreateEvent("jules_session_applied", automation.JulesApplyResult.IsSuccess ? "info" : "error", "Completed Jules patch apply denemesi yapildi.", new { trackedSessionId, automation.JulesApplyResult.ExitCode }));
+
+        if (!automation.JulesApplyResult.IsSuccess)
+        {
+            automation.Summary = "Completed Jules patch apply edilemedi; sonraki Jules session acilmadi.";
+            return automation;
+        }
+
+        agentStateService.MarkCompletedSessionApplied(settings, trackedSessionId);
+
+        if (settings.AutoRunVerification)
+        {
+            automation.VerificationBuildResult = await workspaceAutomationService.BuildAsync(settings, cancellationToken);
+            events.Add(CreateEvent("verification_build_completed", automation.VerificationBuildResult.IsSuccess ? "info" : "error", "Otomatik dotnet build tamamlandi.", new { automation.VerificationBuildResult.ExitCode }));
+
+            if (automation.VerificationBuildResult.IsSuccess)
+            {
+                automation.VerificationTestResult = await workspaceAutomationService.TestAsync(settings, cancellationToken);
+                events.Add(CreateEvent("verification_test_completed", automation.VerificationTestResult.IsSuccess ? "info" : "error", "Otomatik dotnet test tamamlandi.", new { automation.VerificationTestResult.ExitCode }));
+            }
+
+            if (!automation.VerificationBuildResult.IsSuccess || automation.VerificationTestResult is { IsSuccess: false })
+            {
+                automation.AutomationBlocked = true;
+                automation.Summary = "Jules patch apply edildi ama dogrulama basarisiz; commit/push ve sonraki session durduruldu.";
+                automation.GitStatusAfterAutomation = await workspaceAutomationService.GetGitStatusAsync(settings, cancellationToken);
+                return automation;
+            }
+        }
+
+        if (settings.AutoCommitAndPushAppliedChanges)
+        {
+            await CommitAndPushAppliedChangesAsync(settings, trackedSessionId, automation, events, cancellationToken);
+        }
+
+        automation.GitStatusAfterAutomation = await workspaceAutomationService.GetGitStatusAsync(settings, cancellationToken);
+        automation.Summary = BuildAutomationSummary(automation);
+        return automation;
+    }
+
+    private async Task CommitAndPushAppliedChangesAsync(
+        ProjectSettings settings,
+        string trackedSessionId,
+        AgentAutomationArtifacts automation,
+        List<AgentEvent> events,
+        CancellationToken cancellationToken)
+    {
+        automation.GitStageResult = await workspaceAutomationService.StageAllAsync(settings, cancellationToken);
+        events.Add(CreateEvent("git_stage_completed", automation.GitStageResult.IsSuccess ? "info" : "error", "Degisiklikler git index'e alindi.", new { automation.GitStageResult.ExitCode }));
+        if (!automation.GitStageResult.IsSuccess)
+        {
+            automation.AutomationBlocked = true;
+            return;
+        }
+
+        automation.SecretScanResult = await workspaceAutomationService.SecretScanAsync(settings, cancellationToken);
+        var secretScanPassed = WorkspaceAutomationService.SecretScanPassed(automation.SecretScanResult);
+        events.Add(CreateEvent("git_secret_scan_completed", secretScanPassed ? "info" : "error", "Staged secret taramasi tamamlandi.", new { automation.SecretScanResult.ExitCode, passed = secretScanPassed }));
+        if (!secretScanPassed)
+        {
+            automation.AutomationBlocked = true;
+            return;
+        }
+
+        automation.GitCommitResult = await workspaceAutomationService.CommitAsync(settings, trackedSessionId, cancellationToken);
+        var nothingToCommit = WorkspaceAutomationService.HasNothingToCommit(automation.GitCommitResult);
+        events.Add(CreateEvent("git_commit_completed", automation.GitCommitResult.IsSuccess || nothingToCommit ? "info" : "error", "Otomatik commit denemesi tamamlandi.", new { automation.GitCommitResult.ExitCode, nothingToCommit }));
+        if (!automation.GitCommitResult.IsSuccess)
+        {
+            automation.AutomationBlocked = !nothingToCommit;
+            return;
+        }
+
+        automation.GitPushResult = await workspaceAutomationService.PushAsync(settings, cancellationToken);
+        events.Add(CreateEvent("git_push_completed", automation.GitPushResult.IsSuccess ? "info" : "error", "Otomatik push denemesi tamamlandi.", new { automation.GitPushResult.ExitCode }));
+        if (!automation.GitPushResult.IsSuccess)
+        {
+            automation.AutomationBlocked = true;
+        }
+    }
+
+    private static string? SelectPullOutput(AgentAutomationArtifacts automation)
+    {
+        var result = automation.JulesApplyResult ?? automation.JulesPullResult;
+        if (result is null)
         {
             return null;
         }
 
-        if (!sessionsOutput.Contains(settings.TrackedJulesSessionId, StringComparison.Ordinal))
-        {
-            return null;
-        }
-
-        if (!Regex.IsMatch(sessionsOutput, settings.TrackedJulesSessionId + @".*(Completed|Needs\s+review)", RegexOptions.IgnoreCase))
-        {
-            return null;
-        }
-
-        var pull = await julesCliService.PullSessionAsync(settings, settings.TrackedJulesSessionId, apply: false, cancellationToken);
-        events.Add(CreateEvent("jules_session_pulled", pull.IsSuccess ? "info" : "error", "Izlenen Jules session pull sonucu alindi.", new { settings.TrackedJulesSessionId, pull.ExitCode }));
-        return string.IsNullOrWhiteSpace(pull.Output) ? pull.Error : pull.Output;
+        return string.IsNullOrWhiteSpace(result.Output) ? result.Error : result.Output;
     }
 
     private static bool IsTrackedSessionCompleted(string sessionsOutput, string trackedSessionId)
@@ -188,6 +324,10 @@ public sealed class TavlaAgentService
         """ + settings.AgentName + """
          adli proje orkestrator ajanisin. Birincil modelin openai/gpt-oss-120b:free kabul edilir.
         Gorevin Jules'in son durumunu, yerel proje hafizasini, GitHub hedefini ve ajanlarim SQL rapor durumunu okuyup bir sonraki en dogru adimi tasarlamaktir.
+        Ajan dongusu su sekildedir: Jules durumunu oku, tamamlanan isi apply/dogrula/raporla, mevcut repo durumuna gore tek ve uygulanabilir sonraki promptu tasarla, sonra bir sonraki Jules session'a devam et.
+        Jules henuz Planning veya In Progress ise yeni session isteme; sadece mevcut anlik durumu raporla.
+        Completed is apply/dogrulama/commit/push ile guvenli hale geldiyse nextPrompt bir sonraki kucuk faz olsun.
+        nextPrompt mutlaka dosya/modul bazli, test/dogrulama beklentili, 100-500 satir bandinda ve mevcut prodetayi/yapilanlar disiplinine uygun olsun.
         Proje, kullanicinin daha once yaptigi Batak projesine benzer sekilde fazli, loglu, prodetayi hafizali ve Jules destekli ilerlemelidir.
         Batak yalnizca surec disiplini ornegidir; cevapta Batak, FAZ 95 veya baska eski proje icerigi yazma.
         Konu sadece TavlaJules, tavla oyunu, Jules sessionlari ve ajanlarim SQL raporlamasidir.
@@ -250,7 +390,12 @@ public sealed class TavlaAgentService
         };
     }
 
-    private static string BuildProjectContext(ProjectSettings settings, string sessionsOutput, string? pullOutput, DatabaseHealthResult databaseHealth)
+    private static string BuildProjectContext(
+        ProjectSettings settings,
+        string sessionsOutput,
+        string? pullOutput,
+        DatabaseHealthResult databaseHealth,
+        AgentAutomationArtifacts automation)
     {
         return $"""
         GENEL HEDEF:
@@ -268,8 +413,17 @@ public sealed class TavlaAgentService
         JULES PULL OZETI:
         {Trim(pullOutput ?? "Pull yapilmadi; session henuz tamamlanmis gorunmuyor.", 4000)}
 
+        OTONOM AJAN TUR OZETI:
+        {automation.Summary}
+
+        OTONOM KOMUT OZETLERI:
+        {BuildCommandSummary(automation)}
+
         AJANLARIM SQL RAPOR DB DURUMU:
         Configured={databaseHealth.IsConfigured}; Success={databaseHealth.IsSuccess}; Tables={databaseHealth.TableCount}; Message={databaseHealth.Message}
+
+        SON OPENROUTER/AJAN RAPORLARI:
+        {ReadLatestAgentReports(Path.Combine(settings.ProjectFolder, "agent_reports"), 5000)}
 
         YEREL HAFIZA OZETLERI:
         {ReadTextFiles(Path.Combine(settings.ProjectFolder, "prodetayi"), 6000)}
@@ -337,7 +491,8 @@ public sealed class TavlaAgentService
         string sessionsOutput,
         string? pullOutput,
         DatabaseHealthResult databaseHealth,
-        CommandResult? autoResult)
+        CommandResult? autoResult,
+        AgentAutomationArtifacts automation)
     {
         var reportsFolder = Path.Combine(settings.ProjectFolder, "agent_reports");
         Directory.CreateDirectory(reportsFolder);
@@ -358,6 +513,7 @@ public sealed class TavlaAgentService
             },
             julesSessions = sessionsOutput,
             julesPull = pullOutput,
+            automation,
             analysis = completion.Content,
             autoJulesSession = autoResult
         };
@@ -380,6 +536,102 @@ public sealed class TavlaAgentService
             .Select(path => $"--- {Path.GetFileName(path)} ---{Environment.NewLine}{File.ReadAllText(path)}");
 
         return Trim(string.Join(Environment.NewLine, parts), maxChars);
+    }
+
+    private static string ReadLatestAgentReports(string folder, int maxChars)
+    {
+        if (!Directory.Exists(folder))
+        {
+            return "Rapor klasoru yok.";
+        }
+
+        var parts = Directory
+            .GetFiles(folder, "*_agent_report.json")
+            .OrderByDescending(File.GetLastWriteTime)
+            .Take(5)
+            .Select(ReadAgentReportSummary);
+
+        return Trim(string.Join(Environment.NewLine, parts), maxChars);
+    }
+
+    private static string ReadAgentReportSummary(string path)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            var root = document.RootElement;
+            var model = root.TryGetProperty("model", out var modelValue) ? modelValue.GetString() : "";
+            var sessionId = root.TryGetProperty("trackedJulesSessionId", out var sessionValue) ? sessionValue.GetString() : "";
+            var analysis = root.TryGetProperty("analysis", out var analysisValue) ? analysisValue.GetString() ?? "" : "";
+            return $"--- {Path.GetFileName(path)} ---{Environment.NewLine}model={model}; session={sessionId}; analysis={Trim(analysis, 900)}";
+        }
+        catch
+        {
+            return $"--- {Path.GetFileName(path)} ---{Environment.NewLine}{Trim(File.ReadAllText(path), 900)}";
+        }
+    }
+
+    private static string BuildCommandSummary(AgentAutomationArtifacts automation)
+    {
+        var lines = new List<string>
+        {
+            $"trackedCompleted={automation.TrackedSessionCompleted}",
+            $"appliedThisTurn={automation.AppliedThisTurn}",
+            $"alreadyApplied={automation.AlreadyApplied}",
+            $"blocked={automation.AutomationBlocked}"
+        };
+
+        AddCommandLine(lines, "gitStatusBefore", automation.GitStatusBeforeApply);
+        AddCommandLine(lines, "julesPull", automation.JulesPullResult);
+        AddCommandLine(lines, "julesApply", automation.JulesApplyResult);
+        AddCommandLine(lines, "dotnetBuild", automation.VerificationBuildResult);
+        AddCommandLine(lines, "dotnetTest", automation.VerificationTestResult);
+        AddCommandLine(lines, "gitStage", automation.GitStageResult);
+        AddCommandLine(lines, "secretScan", automation.SecretScanResult);
+        AddCommandLine(lines, "gitCommit", automation.GitCommitResult);
+        AddCommandLine(lines, "gitPush", automation.GitPushResult);
+        AddCommandLine(lines, "gitStatusAfter", automation.GitStatusAfterAutomation);
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string BuildAutomationSummary(AgentAutomationArtifacts automation)
+    {
+        if (!automation.TrackedSessionCompleted)
+        {
+            return automation.Summary;
+        }
+
+        if (automation.AutomationBlocked)
+        {
+            return string.IsNullOrWhiteSpace(automation.Summary)
+                ? "Otonom akis bloklandi; agent_events detaylarini kontrol et."
+                : automation.Summary;
+        }
+
+        if (automation.AppliedThisTurn)
+        {
+            var commitText = automation.GitCommitResult?.IsSuccess == true ? " commit edildi" : "";
+            var pushText = automation.GitPushResult?.IsSuccess == true ? " ve pushlandi" : "";
+            return $"Completed Jules patch'i apply edildi, dogrulandi{commitText}{pushText}.";
+        }
+
+        if (automation.AlreadyApplied)
+        {
+            return "Completed Jules patch'i daha once uygulanmis; sonraki prompt karari icin mevcut repo durumu inceleniyor.";
+        }
+
+        return automation.Summary;
+    }
+
+    private static void AddCommandLine(List<string> lines, string name, CommandResult? result)
+    {
+        if (result is null)
+        {
+            return;
+        }
+
+        var text = Trim((result.Output + " " + result.Error).ReplaceLineEndings(" "), 500);
+        lines.Add($"{name}: exit={result.ExitCode}; {text}");
     }
 
     private static string ExtractString(string content, string propertyName)

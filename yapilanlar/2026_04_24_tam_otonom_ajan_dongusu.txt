@@ -1,0 +1,15 @@
+2026-04-24 19:10
+
+TavlaJules ajani tam otonom donguye yaklastirildi.
+
+- Completed Jules session icin otomatik patch apply modu eklendi.
+- Apply oncesi temiz git calisma alani kontrolu eklendi; kirli workspace durumunda otomasyon bloklanir.
+- Apply sonrasinda `dotnet build` ve `dotnet test` dogrulama adimlari eklendi.
+- Dogrulama basarili olursa `git add -A`, staged secret scan, commit ve push adimlari otomatik calisir.
+- Apply/dogrulama/commit/push detaylari `AgentAutomationArtifacts`, `agent_events`, JSON rapor ve dashboard akisi uzerinden izlenebilir hale geldi.
+- OpenRouter baglamina son ajan raporlari ve otonom komut ozeti eklendi; sonraki prompt anlik repo/Jules durumuna gore tasarlanir.
+- UI'a completed patch apply/dogrula ve dogrulanan degisiklikleri commit/push yap secenekleri eklendi.
+
+Test:
+- `dotnet build .\TavlaJules.sln -c Release` basarili, 0 hata.
+- `--agent-once` calistirildi; izlenen Jules session `In Progress` oldugu icin apply/commit/push tetiklenmedi ve SQL'e `agent_runs.id=65` yazildi.

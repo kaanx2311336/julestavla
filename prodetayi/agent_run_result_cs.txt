@@ -5,3 +5,4 @@
 - SQL rapor yazma sonucu `SqlReportMessage` ile UI'a tasinir.
 - Otomatik Jules session acildiyse komut sonucu `AutoJulesSessionResult` ile tasinir.
 - Yeni takip edilecek Jules session id okunabildiyse `NewJulesSessionId` ile UI ve headless calistirma tarafina tasinir.
+- Apply, build/test, secret scan, commit/push ve bloklanma durumu `Automation` alaninda `AgentAutomationArtifacts` olarak tasinir.

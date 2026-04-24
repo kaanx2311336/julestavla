@@ -1,0 +1,7 @@
+`AgentAutomationArtifacts.cs`, tek ajan turundaki otonom islem kanitlarini tasiyan modeldir.
+
+- Izlenen session'in completed olup olmadigini, patch'in bu tur apply edilip edilmedigini ve otomasyonun bloklanip bloklanmadigini tutar.
+- `JulesPullResult` ve `JulesApplyResult`, Jules CLI pull/apply ciktilarini saklar.
+- `VerificationBuildResult` ve `VerificationTestResult`, apply sonrasi `dotnet build` ve `dotnet test` sonucunu saklar.
+- `GitStageResult`, `SecretScanResult`, `GitCommitResult` ve `GitPushResult`, dogrulanmis degisikligin GitHub'a guvenli gonderim surecini raporlar.
+- JSON rapor, UI ve ileride dashboard/SQL event incelemesi icin otonom ozet uretir.

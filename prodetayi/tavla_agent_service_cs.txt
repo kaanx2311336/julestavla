@@ -16,3 +16,7 @@
 - 2026-04-24 devam duzeltmesiyle `AutoContinueCompletedSessions` true ise izlenen Jules session `Completed` veya `Needs review` oldugunda model onayi beklemeden tek seferlik devam session'i acar.
 - Devam edilen completed session id'leri `AgentStateService` ile `agent_state/tavlajules.json` icinde tutulur; bu sayede ayni completed session icin dakika basi tekrar tekrar yeni Jules gorevi acilmaz.
 - Yeni Jules session id cikti icinden okunabilirse `settings.TrackedJulesSessionId` yeni id ile guncellenir ve sonraki turlar artik onu izler.
+- Tam otonom modda completed session icin once git calisma alani temizligi kontrol edilir, sonra `jules remote pull --session <id> --apply` ile patch uygulanir.
+- Apply basarili olursa `dotnet build` ve `dotnet test` calistirilir; dogrulama basariliyse staged secret taramasi yapilip commit/push denenir.
+- Apply, dogrulama, secret scan, commit veya push bloklanirsa yeni Jules session acilmaz; hata `agent_events`, JSON rapor ve dashboard'a yazilir.
+- OpenRouter baglamina son agent raporlari, otonom komut ozetleri ve anlik Jules/Git durumu eklenir; model sonraki promptu bu hafizayla tasarlar.

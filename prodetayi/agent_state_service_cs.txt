@@ -2,6 +2,8 @@
 
 - Durum dosyasi `agent_state/{AgentName}.json` yoluna yazilir; bu klasor git disinda kalir.
 - `HandledCompletedSessionIds`, daha once devam ettirilmis completed Jules session id'lerini saklar.
+- `AppliedCompletedSessionIds`, daha once local workspace'e apply edilmis completed Jules session id'lerini saklar.
 - `MarkCompletedSessionHandled`, completed session'i isaretler ve okunabilirse yeni takip id'sini `LastTrackedSessionId` alanina yazar.
+- `MarkCompletedSessionApplied`, completed session patch'inin tekrar uygulanmasini engellemek icin session id'yi apply listesine ekler.
 - `ParseSessionId`, `jules new` ciktisindaki `ID: ...` satirindan yeni Jules session id'sini okur.
 - Amac, completed bir Jules isinden sonra dakikalik ajan turunun ayni is icin tekrar tekrar yeni session acmasini engellemektir.

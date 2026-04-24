@@ -17,6 +17,12 @@ public sealed class AgentStateService
         return state.HandledCompletedSessionIds.Contains(sessionId, StringComparer.Ordinal);
     }
 
+    public bool HasAppliedCompletedSession(ProjectSettings settings, string sessionId)
+    {
+        var state = Load(settings);
+        return state.AppliedCompletedSessionIds.Contains(sessionId, StringComparer.Ordinal);
+    }
+
     public void MarkCompletedSessionHandled(ProjectSettings settings, string sessionId, string newSessionId)
     {
         var state = Load(settings);
@@ -27,6 +33,19 @@ public sealed class AgentStateService
         }
 
         state.LastTrackedSessionId = newSessionId;
+        state.UpdatedAt = DateTimeOffset.Now;
+        Save(settings, state);
+    }
+
+    public void MarkCompletedSessionApplied(ProjectSettings settings, string sessionId)
+    {
+        var state = Load(settings);
+
+        if (!state.AppliedCompletedSessionIds.Contains(sessionId, StringComparer.Ordinal))
+        {
+            state.AppliedCompletedSessionIds.Add(sessionId);
+        }
+
         state.UpdatedAt = DateTimeOffset.Now;
         Save(settings, state);
     }
@@ -74,5 +93,6 @@ public sealed class AgentStateService
         public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.Now;
         public string LastTrackedSessionId { get; set; } = "";
         public List<string> HandledCompletedSessionIds { get; set; } = [];
+        public List<string> AppliedCompletedSessionIds { get; set; } = [];
     }
 }
