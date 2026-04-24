@@ -22,6 +22,7 @@ public class MoveTests
         Assert.Equal(destination, move.DestinationPoint);
         Assert.Equal(count, move.CheckerCount);
         Assert.Equal(isHit, move.IsHit);
+        Assert.Equal(0, move.DiceUsed);
     }
 
     [Fact]
@@ -37,5 +38,14 @@ public class MoveTests
 
         // Assert
         Assert.False(move.IsHit);
+        Assert.Equal(0, move.DiceUsed);
+    }
+
+    [Fact]
+    public void Move_Constructor_SetsDiceUsedWhenProvided()
+    {
+        var move = new Move(1, 4, 1, diceUsed: 3);
+
+        Assert.Equal(3, move.DiceUsed);
     }
 }

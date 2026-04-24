@@ -29,3 +29,7 @@
 - 2026-04-24 tekrar duzeltmesiyle `jules remote list` icindeki kisaltilmis repo adlari da yakalanir; ayni aciklamaya sahip completed session daha once islenen/applied session ile eslesirse tekrar apply edilmez.
 - OpenRouter kullanilamazsa `local-degraded` artik yeni Jules promptu uretmez; sadece SQL/dashboard raporu yazar. Boylece ayni prompt free model hatalarinda tekrar tekrar Jules'e gitmez.
 - Gonderilen nextPrompt SHA-256 parmak izi `AgentStateService` icinde tutulur; ayni prompt tekrar gelirse yeni session acilmaz.
+- 2026-04-25 iyilestirmesiyle prompt sadece hash ile degil hedef anahtariyla da takip edilir; `GenerateLegalMoves` gibi ayni hedef farkli cumleyle gelirse yeni Jules session acilmaz veya sonraki oyun fazina planlanir.
+- OpenRouter `GenerateLegalMoves` gibi mevcut/denenmis hedefi tekrar onerirse ajan deterministik yol haritasina bakar: explicit dice legal moves -> full-turn move sequences -> game state snapshot sirasi.
+- Completed bir Jules session'in hedefi mevcut lokal kodda zaten uygulanmis gorunurse `pull --apply` atlanir; bu ozellikle eski tekrar session'larinin ayni patch'i tekrar uygulamasini engeller.
+- BuildProjectContext icinde `OYUN FAZ DURUMU` vardir; model done gorunen hedefi tekrar onermemelidir.

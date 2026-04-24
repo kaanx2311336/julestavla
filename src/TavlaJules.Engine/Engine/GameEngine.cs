@@ -127,59 +127,98 @@ public class GameEngine
 
     public IEnumerable<Move> GenerateLegalMoves(PlayerColor player)
     {
-        var legalMoves = new List<Move>();
-
         if (player != CurrentTurn || IsTurnComplete)
-            return legalMoves;
+            yield break;
 
-        var uniqueDice = _remainingDice.Distinct().ToList();
-
-        foreach (var die in uniqueDice)
+        foreach (var move in GenerateLegalMovesForDice(player, _remainingDice))
         {
-            // Check bar first
-            int checkersOnBar = player == PlayerColor.White ? Board.WhiteCheckersOnBar : Board.BlackCheckersOnBar;
-            if (checkersOnBar > 0)
+            yield return move;
+        }
+    }
+
+    public IEnumerable<Move> GenerateLegalMoves(PlayerColor player, (int die1, int die2) dice)
+    {
+        ValidateDie(dice.die1);
+        ValidateDie(dice.die2);
+
+        var diceValues = dice.die1 == dice.die2
+            ? new[] { dice.die1, dice.die1, dice.die1, dice.die1 }
+            : new[] { dice.die1, dice.die2 };
+
+        foreach (var move in GenerateLegalMovesForDice(player, diceValues))
+        {
+            yield return move;
+        }
+    }
+
+    private IEnumerable<Move> GenerateLegalMovesForDice(PlayerColor player, IEnumerable<int> diceValues)
+    {
+        if (player == PlayerColor.None)
+            yield break;
+
+        var uniqueDice = diceValues.Distinct().OrderByDescending(die => die).ToList();
+        if (uniqueDice.Count == 0)
+            yield break;
+
+        int checkersOnBar = player == PlayerColor.White ? Board.WhiteCheckersOnBar : Board.BlackCheckersOnBar;
+        if (checkersOnBar > 0)
+        {
+            foreach (var die in uniqueDice)
             {
                 int sourcePoint = player == PlayerColor.White ? 0 : 25;
                 int destPoint = player == PlayerColor.White ? die : 25 - die;
+                var move = CreateMove(sourcePoint, destPoint, player, die);
 
-                var move = new Move(sourcePoint, destPoint, 1);
                 if (_moveValidator.IsValidMove(Board, player, move, die))
                 {
-                    legalMoves.Add(move);
+                    yield return move;
                 }
             }
-            else
+
+            yield break;
+        }
+
+        foreach (var die in uniqueDice)
+        {
+            for (int sourcePoint = 1; sourcePoint <= 24; sourcePoint++)
             {
-                // Check normal points
-                for (int i = 1; i <= 24; i++)
+                var point = Board.Points[sourcePoint];
+                if (point.Color != player || point.CheckerCount <= 0)
                 {
-                    var point = Board.Points[i];
-                    if (point.Color == player && point.CheckerCount > 0)
-                    {
-                        int destPoint = player == PlayerColor.White ? i + die : i - die;
-                        
-                        // Handle bearing off destination point adjustment
-                        if (player == PlayerColor.White && destPoint > 24) destPoint = 25;
-                        if (player == PlayerColor.Black && destPoint < 1) destPoint = 0;
+                    continue;
+                }
 
-                        var move = new Move(i, destPoint, 1);
-                        // We use infer dice roll inside ApplyMove, but IsValidMove needs exact dice roll
-                        // Infer the roll to see what IsValidMove expects
-                        int inferredRoll = InferDiceRoll(move, player);
+                int destPoint = player == PlayerColor.White ? sourcePoint + die : sourcePoint - die;
+                if (player == PlayerColor.White && destPoint > 24) destPoint = 25;
+                if (player == PlayerColor.Black && destPoint < 1) destPoint = 0;
 
-                        // If it's bearing off, we might be able to use a larger die, but we only generate exact or valid moves here.
-                        // The MoveValidator handles the "larger die" rule if we pass the larger die as the roll.
-                        if (_moveValidator.IsValidMove(Board, player, move, die))
-                        {
-                            legalMoves.Add(move);
-                        }
-                    }
+                var move = CreateMove(sourcePoint, destPoint, player, die);
+                if (_moveValidator.IsValidMove(Board, player, move, die))
+                {
+                    yield return move;
                 }
             }
         }
+    }
 
-        return legalMoves;
+    private Move CreateMove(int sourcePoint, int destPoint, PlayerColor player, int die)
+    {
+        var move = new Move(sourcePoint, destPoint, 1, diceUsed: die);
+        if (!IsBearingOffMove(move, player) && destPoint is >= 1 and <= 24)
+        {
+            var destination = Board.Points[destPoint];
+            move.IsHit = destination.Color != PlayerColor.None
+                && destination.Color != player
+                && destination.CheckerCount == 1;
+        }
+
+        return move;
+    }
+
+    private static void ValidateDie(int die)
+    {
+        if (die < 1 || die > 6)
+            throw new ArgumentOutOfRangeException(nameof(die), "Dice values must be between 1 and 6.");
     }
 
     private int InferDiceRoll(Move move, PlayerColor player)

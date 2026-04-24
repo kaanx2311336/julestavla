@@ -75,7 +75,18 @@ public sealed class AgentStateService
         return state.SentPromptHashes.Contains(HashPrompt(prompt), StringComparer.Ordinal);
     }
 
-    public void MarkPromptSent(ProjectSettings settings, string prompt, string sessionId)
+    public bool HasSentPromptObjective(ProjectSettings settings, string objectiveKey)
+    {
+        if (string.IsNullOrWhiteSpace(objectiveKey))
+        {
+            return false;
+        }
+
+        var state = Load(settings);
+        return state.SentPromptObjectiveKeys.Contains(objectiveKey, StringComparer.Ordinal);
+    }
+
+    public void MarkPromptSent(ProjectSettings settings, string prompt, string sessionId, string objectiveKey = "")
     {
         var state = Load(settings);
         var hash = HashPrompt(prompt);
@@ -83,6 +94,12 @@ public sealed class AgentStateService
         if (!state.SentPromptHashes.Contains(hash, StringComparer.Ordinal))
         {
             state.SentPromptHashes.Add(hash);
+        }
+
+        if (!string.IsNullOrWhiteSpace(objectiveKey)
+            && !state.SentPromptObjectiveKeys.Contains(objectiveKey, StringComparer.Ordinal))
+        {
+            state.SentPromptObjectiveKeys.Add(objectiveKey);
         }
 
         state.LastPromptSessionId = sessionId;
@@ -260,5 +277,6 @@ public sealed class AgentStateService
         public List<string> RepliedAwaitingInputSessionIds { get; set; } = [];
         public List<string> ApprovedAwaitingPlanSessionIds { get; set; } = [];
         public List<string> SentPromptHashes { get; set; } = [];
+        public List<string> SentPromptObjectiveKeys { get; set; } = [];
     }
 }

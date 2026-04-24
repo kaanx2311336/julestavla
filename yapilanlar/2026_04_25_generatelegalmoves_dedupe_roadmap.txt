@@ -1,0 +1,20 @@
+2026-04-25 - GenerateLegalMoves tekrar dongusu ve oyun yol haritasi duzeltmesi
+
+Sorun:
+- Agent raporlarinda ve Jules session listesinde `GenerateLegalMoves(PlayerColor player, (int die1, int die2) dice)` hedefi farkli cumlelerle tekrar tekrar acildi.
+- Mevcut hash korumasi sadece birebir ayni promptu yakaliyordu; ayni hedef farkli metinle yazilinca yeni Jules session aciliyordu.
+
+Yapilan oyun motoru iyilestirmesi:
+- `Move` modeline `DiceUsed` eklendi.
+- `GameEngine` icine `GenerateLegalMoves(PlayerColor, (int die1, int die2))` overload'u eklendi.
+- Explicit dice generator bar onceligi, bloklu hane, hit adayi, bearing-off ve dice metadata durumlarini destekliyor.
+- Test sayisi 34'e cikti; explicit dice legal move davranislari test edildi.
+
+Yapilan ajan iyilestirmesi:
+- `TavlaAgentService` promptlari hedef anahtarina indirger.
+- `GenerateLegalMoves` gibi hedefler uygulanmis veya Jules listesinde denenmis ise tekrar session acilmaz.
+- OpenRouter tekrar ayni hedefi onerirse ajan deterministik yol haritasina gecerek sonraki oyun fazini secer: full-turn move sequence generation, sonra game state snapshot.
+- `AgentStateService` artik `SentPromptObjectiveKeys` tutar.
+
+Dogrulama:
+- `dotnet test .\TavlaJules.sln -c Release` basarili; 34 test gecti.

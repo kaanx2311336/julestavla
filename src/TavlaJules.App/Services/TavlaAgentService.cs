@@ -64,7 +64,8 @@ public sealed class TavlaAgentService
                 events.Add(CreateEvent("openrouter_degraded", "warning", "OpenRouter free modelleri gecici kullanilamadi; yerel rapor uretildi.", new { exception.GetType().Name }));
             }
 
-            var nextPrompt = ExtractString(completion.Content, "nextPrompt");
+            var proposedNextPrompt = ExtractString(completion.Content, "nextPrompt");
+            var nextPrompt = SelectNextPrompt(settings, proposedNextPrompt, relevantSessionsOutput, events);
             var shouldStart = ExtractBool(completion.Content, "shouldStartNewJulesSession");
             var shouldContinueCompletedSession = settings.AutoContinueCompletedSessions
                 && automation.TrackedSessionCompleted
@@ -77,13 +78,26 @@ public sealed class TavlaAgentService
                 && !automation.AutomationBlocked
                 && !string.IsNullOrWhiteSpace(automation.AwaitingInputRecoveryPrompt);
             var promptToSend = shouldRecoverAwaitingInputSession ? automation.AwaitingInputRecoveryPrompt : nextPrompt;
+            var promptObjectiveKey = BuildPromptObjectiveKey(promptToSend);
+            var trackedSessionBusy = IsTrackedSessionBusy(relevantSessionsOutput, trackedSessionIdAtStart, automation);
             CommandResult? autoResult = null;
             var newJulesSessionId = "";
 
-            if ((shouldRecoverAwaitingInputSession || (settings.AllowAutoJulesSessions && shouldStart) || shouldContinueCompletedSession)
+            if (!trackedSessionBusy
+                && (shouldRecoverAwaitingInputSession || (settings.AllowAutoJulesSessions && shouldStart) || shouldContinueCompletedSession)
                 && !string.IsNullOrWhiteSpace(promptToSend))
             {
-                if (agentStateService.HasSentPrompt(settings, promptToSend))
+                if (IsPromptObjectiveImplemented(settings.ProjectFolder, promptObjectiveKey))
+                {
+                    events.Add(CreateEvent(
+                        "implemented_next_prompt_skipped",
+                        "warning",
+                        "Onerilen Jules prompt hedefi mevcut kodda uygulanmis gorundugu icin yeni session acilmadi.",
+                        new { promptObjectiveKey, prompt = Trim(promptToSend, 700) }));
+                }
+                else if (agentStateService.HasSentPrompt(settings, promptToSend)
+                    || agentStateService.HasSentPromptObjective(settings, promptObjectiveKey)
+                    || SessionsContainObjective(relevantSessionsOutput, promptObjectiveKey))
                 {
                     if (shouldRecoverAwaitingInputSession)
                     {
@@ -99,8 +113,8 @@ public sealed class TavlaAgentService
                     events.Add(CreateEvent(
                         "duplicate_next_prompt_skipped",
                         "warning",
-                        "Ayni Jules promptu daha once gonderildigi icin yeni session acilmadi.",
-                        new { trackedSessionIdAtStart, shouldRecoverAwaitingInputSession }));
+                        "Ayni Jules prompt hedefi daha once gonderildigi veya Jules listesinde bulundugu icin yeni session acilmadi.",
+                        new { trackedSessionIdAtStart, shouldRecoverAwaitingInputSession, promptObjectiveKey }));
                 }
                 else
                 {
@@ -109,7 +123,7 @@ public sealed class TavlaAgentService
 
                     if (autoResult.IsSuccess)
                     {
-                        agentStateService.MarkPromptSent(settings, promptToSend, newJulesSessionId);
+                        agentStateService.MarkPromptSent(settings, promptToSend, newJulesSessionId, promptObjectiveKey);
                     }
 
                     if (autoResult.IsSuccess && shouldRecoverAwaitingInputSession)
@@ -150,6 +164,14 @@ public sealed class TavlaAgentService
                         ? "Izlenen Jules session daha once input bekliyor diye ele alindi."
                         : "Izlenen Jules session kullanici girdisi bekliyor; otomatik kurtarma kapali veya uygun degil.",
                     new { trackedSessionIdAtStart, settings.AutoRecoverAwaitingInputSessions, automation.AwaitingInputAlreadyHandled }));
+            }
+            else if (trackedSessionBusy)
+            {
+                events.Add(CreateEvent(
+                    "tracked_jules_session_busy",
+                    "info",
+                    "Izlenen Jules session Planning/In Progress oldugu icin yeni Jules session acilmadi.",
+                    new { trackedSessionIdAtStart }));
             }
             else if (automation.TrackedSessionCompleted && !shouldContinueCompletedSession)
             {
@@ -268,6 +290,21 @@ public sealed class TavlaAgentService
         if (!automation.TrackedSessionCompleted)
         {
             automation.Summary = "Izlenen Jules session henuz tamamlanmadi; ajan durum raporu uretir ve bekler.";
+            return automation;
+        }
+
+        var completedObjectiveKey = BuildPromptObjectiveKey(TryGetSessionDescription(sessionsOutput, trackedSessionId));
+        if (IsPromptObjectiveImplemented(settings.ProjectFolder, completedObjectiveKey))
+        {
+            automation.AlreadyApplied = true;
+            automation.DuplicateCompletedSession = true;
+            automation.Summary = $"Completed Jules session hedefi ({completedObjectiveKey}) mevcut kodda zaten uygulanmis; patch pull/apply edilmeyecek.";
+            agentStateService.MarkCompletedSessionHandled(settings, trackedSessionId, trackedSessionId);
+            events.Add(CreateEvent(
+                "completed_objective_already_implemented",
+                "warning",
+                "Completed Jules session hedefi mevcut kodda zaten uygulandigi icin pull/apply atlandi.",
+                new { trackedSessionId, completedObjectiveKey }));
             return automation;
         }
 
@@ -842,6 +879,257 @@ public sealed class TavlaAgentService
         """;
     }
 
+    private static string SelectNextPrompt(
+        ProjectSettings settings,
+        string proposedPrompt,
+        string sessionsOutput,
+        List<AgentEvent> events)
+    {
+        if (string.IsNullOrWhiteSpace(proposedPrompt))
+        {
+            return "";
+        }
+
+        var objectiveKey = BuildPromptObjectiveKey(proposedPrompt);
+        if (string.IsNullOrWhiteSpace(objectiveKey))
+        {
+            return proposedPrompt;
+        }
+
+        var implemented = IsPromptObjectiveImplemented(settings.ProjectFolder, objectiveKey);
+        var alreadyInJules = SessionsContainObjective(sessionsOutput, objectiveKey);
+        if (!implemented && !alreadyInJules)
+        {
+            return proposedPrompt;
+        }
+
+        var replacementPrompt = BuildNextGameImprovementPrompt(settings, objectiveKey);
+        var replacementKey = BuildPromptObjectiveKey(replacementPrompt);
+        if (string.IsNullOrWhiteSpace(replacementPrompt)
+            || string.IsNullOrWhiteSpace(replacementKey)
+            || objectiveKey.Equals(replacementKey, StringComparison.Ordinal))
+        {
+            return proposedPrompt;
+        }
+
+        events.Add(CreateEvent(
+            "next_prompt_replanned",
+            "warning",
+            "OpenRouter ayni veya uygulanmis oyun hedefini onerdi; ajan sonraki oyun fazina gecti.",
+            new { objectiveKey, replacementKey, implemented, alreadyInJules }));
+
+        return replacementPrompt;
+    }
+
+    private static string BuildNextGameImprovementPrompt(ProjectSettings settings, string skippedObjectiveKey)
+    {
+        if (!IsPromptObjectiveImplemented(settings.ProjectFolder, "engine.generate-legal-moves-explicit-dice"))
+        {
+            return $"""
+            Implement the explicit dice legal move generator for repo {settings.GitHubRepo}.
+
+            Target files:
+            - `src/TavlaJules.Engine/Engine/GameEngine.cs`
+            - `src/TavlaJules.Engine/Models/Move.cs`
+            - `src/TavlaJules.Engine.Tests/Engine/GameEngineTests.cs`
+            - `src/TavlaJules.Engine.Tests/Models/MoveTests.cs`
+            - relevant `prodetayi/` summaries and one dated `yapilanlar/` note
+
+            Requirements:
+            - Add `GenerateLegalMoves(PlayerColor player, (int die1, int die2) dice): IEnumerable<Move>`.
+            - Keep the existing `GenerateLegalMoves(PlayerColor player)` API.
+            - Add `DiceUsed` metadata to `Move` so UI/online replay can show which die produced the legal move.
+            - Respect bar priority, blocked points, hits, bearing off with larger die, and doubles.
+            - Add focused tests for explicit dice, blocked points, bar entry, hit metadata, and bearing off.
+            - Do not touch secrets or `.env` values.
+            """;
+        }
+
+        if (!IsPromptObjectiveImplemented(settings.ProjectFolder, "engine.move-sequences"))
+        {
+            return $"""
+            Create the next TavlaJules engine phase: full-turn legal move sequence generation for repo {settings.GitHubRepo}.
+
+            Target files:
+            - new `src/TavlaJules.Engine/Engine/MoveSequenceGenerator.cs`
+            - new or updated tests under `src/TavlaJules.Engine.Tests/Engine/`
+            - relevant `prodetayi/` summaries and one dated `yapilanlar/` note
+
+            Goal:
+            The current engine can list single legal moves for dice. Add a focused generator that returns ordered legal move sequences for a complete turn, so the UI/AI can choose a whole turn instead of one isolated move.
+
+            Requirements:
+            - Use existing `Board`, `Move`, `MoveValidator`, and `GameEngine.GenerateLegalMoves`; do not rewrite rule classes.
+            - Support normal dice order permutations, doubles as four moves, bar-entry priority, hits, blocked points, and bearing-off.
+            - Do not mutate the original board while exploring sequences; add a small internal board copy helper if needed.
+            - Return a compact model such as `IReadOnlyList<IReadOnlyList<Move>>` or a small `MoveSequence` class if that is cleaner.
+            - Keep the patch around 100-500 lines and add deterministic unit tests.
+            - Run or keep compatible with `dotnet build` and `dotnet test`.
+            - Do not include secrets, API keys, or database passwords.
+            """;
+        }
+
+        if (!IsPromptObjectiveImplemented(settings.ProjectFolder, "engine.game-state-snapshot"))
+        {
+            return $"""
+            Add a serializable game state snapshot layer for TavlaJules repo {settings.GitHubRepo}.
+
+            Target files:
+            - new model file under `src/TavlaJules.Engine/Models/`
+            - focused tests under `src/TavlaJules.Engine.Tests/Models/`
+            - relevant `prodetayi/` summaries and one dated `yapilanlar/` note
+
+            Goal:
+            Prepare the engine for mobile UI and online persistence by exposing a safe snapshot of board points, bars, borne-off counts, current turn, remaining dice, and winner/progress flags.
+
+            Requirements:
+            - Do not expose mutable engine internals directly.
+            - Keep DTO names clear and JSON-friendly.
+            - Add tests that snapshots match a fresh board and after one move.
+            - Do not include secrets or `.env` values.
+            """;
+        }
+
+        return "";
+    }
+
+    private static string BuildPromptObjectiveKey(string prompt)
+    {
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            return "";
+        }
+
+        var normalized = NormalizeSessionDescription(prompt);
+        if (normalized.Contains("generatelegalmoves", StringComparison.Ordinal)
+            || normalized.Contains("generate legal moves", StringComparison.Ordinal))
+        {
+            return normalized.Contains("die1", StringComparison.Ordinal)
+                || normalized.Contains("die2", StringComparison.Ordinal)
+                || normalized.Contains("explicit dice", StringComparison.Ordinal)
+                || normalized.Contains("supplied dice", StringComparison.Ordinal)
+                ? "engine.generate-legal-moves-explicit-dice"
+                : "engine.generate-legal-moves-current-turn";
+        }
+
+        if (normalized.Contains("movesequence", StringComparison.Ordinal)
+            || normalized.Contains("move sequence", StringComparison.Ordinal)
+            || normalized.Contains("full-turn", StringComparison.Ordinal)
+            || normalized.Contains("complete turn", StringComparison.Ordinal))
+        {
+            return "engine.move-sequences";
+        }
+
+        if (normalized.Contains("game state snapshot", StringComparison.Ordinal)
+            || normalized.Contains("serializable game state", StringComparison.Ordinal)
+            || normalized.Contains("snapshot layer", StringComparison.Ordinal))
+        {
+            return "engine.game-state-snapshot";
+        }
+
+        if (normalized.Contains("rolldice", StringComparison.Ordinal)
+            || normalized.Contains("startturn", StringComparison.Ordinal)
+            || normalized.Contains("remainingdice", StringComparison.Ordinal)
+            || normalized.Contains("advanceturn", StringComparison.Ordinal))
+        {
+            return "engine.turn-dice";
+        }
+
+        return "";
+    }
+
+    private static bool IsPromptObjectiveImplemented(string projectFolder, string objectiveKey)
+    {
+        var gameEnginePath = Path.Combine(projectFolder, "src", "TavlaJules.Engine", "Engine", "GameEngine.cs");
+        var movePath = Path.Combine(projectFolder, "src", "TavlaJules.Engine", "Models", "Move.cs");
+        var gameEngine = File.Exists(gameEnginePath) ? File.ReadAllText(gameEnginePath) : "";
+        var move = File.Exists(movePath) ? File.ReadAllText(movePath) : "";
+
+        return objectiveKey switch
+        {
+            "engine.generate-legal-moves-explicit-dice" =>
+                Regex.IsMatch(gameEngine, @"GenerateLegalMoves\s*\(\s*PlayerColor\s+player\s*,\s*\(int\s+die1,\s*int\s+die2\)\s+dice\s*\)", RegexOptions.IgnoreCase)
+                && move.Contains("DiceUsed", StringComparison.Ordinal),
+            "engine.generate-legal-moves-current-turn" =>
+                Regex.IsMatch(gameEngine, @"GenerateLegalMoves\s*\(\s*PlayerColor\s+player\s*\)", RegexOptions.IgnoreCase),
+            "engine.turn-dice" =>
+                gameEngine.Contains("RollDice", StringComparison.Ordinal)
+                && gameEngine.Contains("StartTurn", StringComparison.Ordinal)
+                && gameEngine.Contains("RemainingDice", StringComparison.Ordinal)
+                && gameEngine.Contains("AdvanceTurn", StringComparison.Ordinal),
+            "engine.move-sequences" =>
+                File.Exists(Path.Combine(projectFolder, "src", "TavlaJules.Engine", "Engine", "MoveSequenceGenerator.cs")),
+            "engine.game-state-snapshot" =>
+                Directory.Exists(Path.Combine(projectFolder, "src", "TavlaJules.Engine", "Models"))
+                && Directory.GetFiles(Path.Combine(projectFolder, "src", "TavlaJules.Engine", "Models"), "*Snapshot*.cs").Length > 0,
+            _ => false
+        };
+    }
+
+    private static bool SessionsContainObjective(string sessionsOutput, string objectiveKey)
+    {
+        if (string.IsNullOrWhiteSpace(objectiveKey))
+        {
+            return false;
+        }
+
+        return sessionsOutput
+            .Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => BuildPromptObjectiveKey(ExtractSessionDescriptionFromLine(line)))
+            .Any(sessionObjective => ObjectiveKeysMatch(sessionObjective, objectiveKey));
+    }
+
+    private static bool ObjectiveKeysMatch(string left, string right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
+        {
+            return false;
+        }
+
+        if (left.Equals(right, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return left.StartsWith("engine.generate-legal-moves", StringComparison.Ordinal)
+            && right.StartsWith("engine.generate-legal-moves", StringComparison.Ordinal);
+    }
+
+    private static bool IsTrackedSessionBusy(
+        string sessionsOutput,
+        string trackedSessionId,
+        AgentAutomationArtifacts automation)
+    {
+        if (string.IsNullOrWhiteSpace(trackedSessionId)
+            || automation.TrackedSessionCompleted
+            || automation.TrackedSessionAwaitingInput)
+        {
+            return false;
+        }
+
+        var line = FindSessionLine(sessionsOutput, trackedSessionId);
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return false;
+        }
+
+        return !Regex.IsMatch(line, @"\b(Completed|Needs\s+review)\b", RegexOptions.IgnoreCase);
+    }
+
+    private static string BuildGameRoadmapSummary(string projectFolder)
+    {
+        var checks = new Dictionary<string, string>
+        {
+            ["turnDice"] = IsPromptObjectiveImplemented(projectFolder, "engine.turn-dice") ? "done" : "missing",
+            ["singleLegalMoves"] = IsPromptObjectiveImplemented(projectFolder, "engine.generate-legal-moves-current-turn") ? "done" : "missing",
+            ["explicitDiceLegalMoves"] = IsPromptObjectiveImplemented(projectFolder, "engine.generate-legal-moves-explicit-dice") ? "done" : "missing",
+            ["fullTurnMoveSequences"] = IsPromptObjectiveImplemented(projectFolder, "engine.move-sequences") ? "done" : "missing",
+            ["gameStateSnapshot"] = IsPromptObjectiveImplemented(projectFolder, "engine.game-state-snapshot") ? "done" : "missing"
+        };
+
+        return string.Join(Environment.NewLine, checks.Select(item => $"{item.Key}={item.Value}"));
+    }
+
     private static string BuildSystemPrompt(ProjectSettings settings)
     {
         return """
@@ -853,6 +1141,8 @@ public sealed class TavlaAgentService
         Jules henuz Planning veya In Progress ise yeni session isteme; sadece mevcut anlik durumu raporla.
         Jules Awaiting User Feedback/Input durumundaysa bunu bekleyen soru olarak raporla; tavlajules bu durumda netlestirilmis kurtarma promptu uretebilir.
         Completed is apply/dogrulama/commit/push ile guvenli hale geldiyse nextPrompt bir sonraki kucuk faz olsun.
+        Ayni methodu veya ayni hedefi farkli cumlelerle tekrar onerme. OYUN FAZ DURUMU icinde done gorunen hedefler icin nextPrompt yazma.
+        GenerateLegalMoves ve dice/turn isleri done ise sonraki dogru oyun fazi full-turn move sequence generation, sonra game state snapshot, sonra online DB persistence olmalidir.
         nextPrompt mutlaka dosya/modul bazli, test/dogrulama beklentili, 100-500 satir bandinda ve mevcut prodetayi/yapilanlar disiplinine uygun olsun.
         Proje, kullanicinin daha once yaptigi Batak projesine benzer sekilde fazli, loglu, prodetayi hafizali ve Jules destekli ilerlemelidir.
         Batak yalnizca surec disiplini ornegidir; cevapta Batak, FAZ 95 veya baska eski proje icerigi yazma.
@@ -957,6 +1247,9 @@ public sealed class TavlaAgentService
 
         OTONOM KOMUT OZETLERI:
         {BuildCommandSummary(automation)}
+
+        OYUN FAZ DURUMU:
+        {BuildGameRoadmapSummary(settings.ProjectFolder)}
 
         AJANLARIM SQL RAPOR DB DURUMU:
         Configured={databaseHealth.IsConfigured}; Success={databaseHealth.IsSuccess}; Tables={databaseHealth.TableCount}; Message={databaseHealth.Message}

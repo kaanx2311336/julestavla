@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Xunit;
 using TavlaJules.Engine.Engine;
 using TavlaJules.Engine.Models;
@@ -252,5 +253,87 @@ public class GameEngineTests
         Assert.Equal(2, legalMoves.Count);
         Assert.Contains(legalMoves, m => m.SourcePoint == 1 && m.DestinationPoint == 3);
         Assert.Contains(legalMoves, m => m.SourcePoint == 1 && m.DestinationPoint == 4);
+    }
+
+    [Fact]
+    public void GenerateLegalMoves_WithExplicitDice_ReturnsMovesWithDiceUsed()
+    {
+        var board = CreateEmptyBoard();
+        board.Points[1].CheckerCount = 1;
+        board.Points[1].Color = PlayerColor.White;
+
+        var engine = new GameEngine(board);
+        engine.SetTurn(PlayerColor.Black);
+
+        var legalMoves = engine.GenerateLegalMoves(PlayerColor.White, (2, 3)).ToList();
+
+        Assert.Equal(2, legalMoves.Count);
+        Assert.Contains(legalMoves, move => move.SourcePoint == 1 && move.DestinationPoint == 3 && move.DiceUsed == 2);
+        Assert.Contains(legalMoves, move => move.SourcePoint == 1 && move.DestinationPoint == 4 && move.DiceUsed == 3);
+    }
+
+    [Fact]
+    public void GenerateLegalMoves_WithExplicitDice_RespectsBlockedPoint()
+    {
+        var board = CreateEmptyBoard();
+        board.Points[1].CheckerCount = 1;
+        board.Points[1].Color = PlayerColor.White;
+        board.Points[4].CheckerCount = 2;
+        board.Points[4].Color = PlayerColor.Black;
+
+        var engine = new GameEngine(board);
+
+        var legalMoves = engine.GenerateLegalMoves(PlayerColor.White, (2, 3)).ToList();
+
+        Assert.DoesNotContain(legalMoves, move => move.DestinationPoint == 4);
+        Assert.Contains(legalMoves, move => move.DestinationPoint == 3 && move.DiceUsed == 2);
+    }
+
+    [Fact]
+    public void GenerateLegalMoves_WithExplicitDice_ForcesBarEntry()
+    {
+        var board = CreateEmptyBoard();
+        board.WhiteCheckersOnBar = 1;
+        board.Points[1].CheckerCount = 1;
+        board.Points[1].Color = PlayerColor.White;
+
+        var engine = new GameEngine(board);
+
+        var legalMoves = engine.GenerateLegalMoves(PlayerColor.White, (2, 3)).ToList();
+
+        Assert.All(legalMoves, move => Assert.Equal(0, move.SourcePoint));
+        Assert.Contains(legalMoves, move => move.DestinationPoint == 2 && move.DiceUsed == 2);
+        Assert.Contains(legalMoves, move => move.DestinationPoint == 3 && move.DiceUsed == 3);
+    }
+
+    [Fact]
+    public void GenerateLegalMoves_WithExplicitDice_AllowsBearingOffWithLargerDie()
+    {
+        var board = CreateEmptyBoard();
+        board.Points[24].CheckerCount = 1;
+        board.Points[24].Color = PlayerColor.White;
+
+        var engine = new GameEngine(board);
+
+        var legalMoves = engine.GenerateLegalMoves(PlayerColor.White, (6, 1)).ToList();
+
+        Assert.Contains(legalMoves, move => move.SourcePoint == 24 && move.DestinationPoint == 25 && move.DiceUsed == 6);
+        Assert.Contains(legalMoves, move => move.SourcePoint == 24 && move.DestinationPoint == 25 && move.DiceUsed == 1);
+    }
+
+    private static Board CreateEmptyBoard()
+    {
+        var board = new Board();
+        for (int i = 1; i <= 24; i++)
+        {
+            board.Points[i].CheckerCount = 0;
+            board.Points[i].Color = PlayerColor.None;
+        }
+
+        board.WhiteCheckersOnBar = 0;
+        board.BlackCheckersOnBar = 0;
+        board.WhiteCheckersBorneOff = 0;
+        board.BlackCheckersBorneOff = 0;
+        return board;
     }
 }

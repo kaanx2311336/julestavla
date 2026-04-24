@@ -8,6 +8,7 @@
 - `RepliedAwaitingInputSessionIds`, ayni `Awaiting User Feedback` session'ina ayni cevabin dakika basi tekrar gonderilmesini engeller.
 - `ApprovedAwaitingPlanSessionIds`, ayni `Awaiting Plan Approval` session'ina tekrar tekrar plan onayi gonderilmesini engeller.
 - `SentPromptHashes`, Jules'e daha once gonderilen promptlarin hash'lerini saklar ve ayni promptun tekrar session acmasini engeller.
+- `SentPromptObjectiveKeys`, ayni hedefin farkli cumlelerle tekrar Jules'e gitmesini engeller. Ornek: `engine.generate-legal-moves-explicit-dice`.
 - `PendingAppliedSessionId`, apply edilmis ama commit/push akisi tamamlanmadan kirli kalmis workspace'i sonraki turda toparlamak icin kullanilir.
 - `GetLastPromptSessionId`, tekrar algisinda son acilan Jules session id'sini bulmak icin kullanilir.
 - `MarkAwaitingInputSessionHandled`, input bekleyen session'i ele alinmis sayar ve yeni takip id'sini kaydeder.

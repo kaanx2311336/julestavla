@@ -9,3 +9,5 @@ Summarizes the `GameEngine` class located at `src/TavlaJules.Engine/Engine/GameE
     *   `AdvanceTurn()` switches current players after all dice are consumed.
     *   `ApplyMove(Move)` executes single checker moves securely by inferring the dice roll, ensuring there is a corresponding remaining die, consuming the die, hitting, and bearing off.
     *   `GenerateLegalMoves(PlayerColor)` finds all available correct single moves for the player depending on the unconsumed dice.
+    *   `GenerateLegalMoves(PlayerColor, (int die1, int die2))` finds legal single moves for supplied dice without requiring an active turn, useful for UI previews, AI analysis, and online replay validation.
+    *   Generated `Move` values now include `DiceUsed`, and hit candidates mark `IsHit` before application.
