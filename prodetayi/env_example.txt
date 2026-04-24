@@ -1,0 +1,8 @@
+`.env.example`, gizli degerler icin ornek ortam dosyasidir.
+
+- `OPENROUTER_API_KEY` bos birakilir; gercek anahtar `.env` dosyasinda tutulmalidir.
+- Varsayilan model `openai/gpt-oss-120b:free`.
+- Fallback modeller `OPENROUTER_FALLBACK_MODELS` ile tutulur.
+- OpenRouter endpoint'i `OPENROUTER_API_URL` alaninda tutulur.
+- Varsayilan Jules adresi `https://jules.google.com`.
+- Varsayilan GitHub repo `kaanx2311336/julestavla`.

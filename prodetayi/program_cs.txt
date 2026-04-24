@@ -1,0 +1,5 @@
+`Program.cs`, TavlaJules masaustu uygulamasinin giris noktasidir.
+
+- .NET WinForms ApplicationConfiguration baslatilir.
+- Varsayilan form olarak `MainForm` acilir.
+- Uygulama Windows EXE hedefli `net9.0-windows` projesidir.

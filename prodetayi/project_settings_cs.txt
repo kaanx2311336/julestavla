@@ -1,0 +1,10 @@
+`ProjectSettings.cs`, TavlaJules icin saklanan temel ayarlari modeller.
+
+- `ProjectFolder`: tavlajules calisma klasoru.
+- `GitHubRepo`: Jules'in calisacagi GitHub repo slug'i (`kaanx2311336/julestavla`).
+- `JulesUrl`: Jules web adresi.
+- `JulesCommand`: lokal Jules CLI komutu (`jules.cmd`).
+- `OpenRouterModel`: kontrol icin hedef OpenRouter modeli.
+- `OpenRouterFallbackModels`: primary model 503/429 gibi gecici hata verirse denenebilecek modeller.
+- `OpenRouterEndpoint`: OpenRouter chat completions endpoint'i.
+- `Goal`: projenin genel hedef metni.

@@ -1,0 +1,15 @@
+2026-04-24 - TavlaJules C# EXE iskeleti baslatildi.
+
+Yapilanlar:
+- `TavlaJules.sln` ve `src/TavlaJules.App` WinForms projesi olusturuldu.
+- `MainForm` ile koyu temali kontrol paneli eklendi.
+- Proje klasoru, Jules URL, OpenRouter model ve genel hedef ayarlari icin alanlar eklendi.
+- Faz plani listesi ve calisma gunlugu eklendi.
+- Ayarlari JSON olarak saklayan `ProjectSettingsService` eklendi; API key saklanmiyor.
+- Varsayilan yol haritasini ureten `PhasePlanService` eklendi.
+- `.env.example`, `.gitignore`, `README.md`, `prodetayi/` ozetleri ve bu is logu olusturuldu.
+- `dotnet build .\TavlaJules.sln -c Release` 0 hata / 0 uyari ile basarili oldu.
+- `dotnet publish` ile `publish\TavlaJules.App.exe` uretildi.
+
+Sonraki dogal faz:
+- Tavla kural motoru icin saf C# class library ve unit test projesi eklenmeli.

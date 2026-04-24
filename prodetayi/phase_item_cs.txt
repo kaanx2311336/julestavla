@@ -1,0 +1,4 @@
+`PhaseItem.cs`, yol haritasindaki tek bir fazi temsil eder.
+
+- Sira numarasi, baslik, aciklama ve tamamlanma durumu tasir.
+- `MainForm` icindeki faz listesine veri saglar.

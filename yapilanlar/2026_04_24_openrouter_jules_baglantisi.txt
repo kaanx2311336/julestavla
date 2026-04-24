@@ -1,0 +1,15 @@
+2026-04-24 - OpenRouter ve Jules baglantisi eklendi.
+
+Yapilanlar:
+- OpenRouter API key proje kokundeki `.env` dosyasina yerlestirildi; `.gitignore` nedeniyle repoya eklenmez.
+- OpenRouter endpoint'i, primary model ve fallback modeller `.env.example` ile belgelendi.
+- `OpenRouterClient` eklendi; chat completions endpoint'ine test istegi atiyor.
+- Primary model `openai/gpt-oss-120b:free` 503 verdiginde fallback model zinciri deneniyor.
+- Lokal testte `google/gemma-3n-e2b-it:free` modeli cevap dondurdu.
+- `JulesCliService` eklendi; `jules.cmd version` testi ve `jules new --repo ...` remote session baslatma akisi hazirlandi.
+- Jules CLI baglantisi dogrulandi; `jules remote list --repo` icinde `kaanx2311336/julestavla` gorundu.
+- Yerel klasor Git reposu olarak baslatildi ve `origin` remote'u `https://github.com/kaanx2311336/julestavla.git` olarak eklendi.
+
+Guvenlik notu:
+- API key bu log dosyasina yazilmadi.
+- Konusmada paylasilan anahtar aciga cikmis sayilacagi icin OpenRouter panelinden yeni anahtar uretilmesi onerilir.

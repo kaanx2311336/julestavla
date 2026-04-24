@@ -1,0 +1,6 @@
+`.gitignore`, repoya girmemesi gereken yerel dosyalari dislar.
+
+- Build ciktilari: `bin/`, `obj/`, `publish/`.
+- Visual Studio klasoru: `.vs/`.
+- Gizli ortam dosyasi: `.env`.
+- Kullaniciya ozel proje ayarlari: `*.user`.

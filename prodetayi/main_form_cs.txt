@@ -1,0 +1,10 @@
+`MainForm.cs`, TavlaJules kontrol panelinin ana WinForms ekranidir.
+
+- Koyu temali tek ekran masaustu arayuzu kurar.
+- Proje klasoru, GitHub repo, Jules URL, OpenRouter model, OpenRouter API key ve genel hedef alanlarini gosterir.
+- Ayarlari `%AppData%\TavlaJules\settings.json` dosyasina kaydeder.
+- API key yalnizca proje kokundeki `.env` dosyasina yazilir; bos birakilirsa mevcut `.env` anahtari korunur.
+- OpenRouter baglanti testi yapar; primary model calismazsa fallback model zincirine duser.
+- Jules CLI version testi yapar ve `jules new --repo ...` ile remote session baslatabilir.
+- Jules icin duzenlenebilir gorev promptu alanini, faz planini ve calisma gunlugunu ekranda tutar.
+- Proje klasorunu ve GitHub reposunu dis uygulamada acabilir.

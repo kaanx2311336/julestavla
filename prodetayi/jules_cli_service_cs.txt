@@ -1,0 +1,6 @@
+`JulesCliService.cs`, lokal Jules CLI komutlarini calistiran servistir.
+
+- `VersionAsync`, `jules.cmd version` ile CLI'nin hazir olup olmadigini kontrol eder.
+- `CreateSessionAsync`, `jules.cmd new --repo <repo> "<prompt>"` ile Jules remote session baslatir.
+- Komutlar proje klasoru calisma diziniyle calisir.
+- Standart cikti, hata cikisi ve exit code `CommandResult` olarak UI'a tasinir.

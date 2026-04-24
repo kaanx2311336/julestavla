@@ -1,0 +1,6 @@
+`EnvFileService.cs`, proje kokundeki `.env` dosyasini yonetir.
+
+- `.env` yolunu proje klasorune gore hesaplar.
+- Key/value satirlarini okur ve yorum/bos satirlari atlar.
+- Var olan degerleri gunceller veya yeni satir olarak ekler.
+- `OPENROUTER_API_KEY` gibi gizli degerleri git'e girmeyen `.env` dosyasinda tutmak icin kullanilir.

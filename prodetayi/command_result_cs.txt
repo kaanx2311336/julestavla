@@ -1,0 +1,5 @@
+`CommandResult.cs`, dis komut calistirma sonuclarini tasiyan basit modeldir.
+
+- `ExitCode`, `Output` ve `Error` alanlarini tutar.
+- `IsSuccess`, cikis kodu 0 ise true doner.
+- `JulesCliService` tarafindan Jules CLI sonucunu UI'a guvenli sekilde aktarmak icin kullanilir.

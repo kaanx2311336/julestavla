@@ -1,0 +1,6 @@
+`TavlaJules.App.csproj`, WinForms masaustu uygulamasinin proje dosyasidir.
+
+- `OutputType` WinExe olarak ayarlidir.
+- Hedef framework `net9.0-windows`.
+- Windows Forms destegi `UseWindowsForms=true` ile aciktir.
+- Nullable ve implicit using ozellikleri aciktir.

@@ -1,0 +1,4 @@
+`PhasePlanService.cs`, TavlaJules icin varsayilan gelistirme fazlarini uretir.
+
+- Hedef/ayarlar, tavla kural motoru, telefon UI gorevleri, Jules otomasyonu, AI kontrol raporu ve EXE paketleme adimlarini dondurur.
+- OpenRouter model ayarini faz aciklamasina dahil eder.

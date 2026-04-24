@@ -1,0 +1,7 @@
+`OpenRouterClient.cs`, OpenRouter chat completions endpoint'ine test istegi atan servistir.
+
+- Endpoint: `https://openrouter.ai/api/v1/chat/completions`.
+- Authorization Bearer header'i ile `.env` icindeki API key kullanilir.
+- Primary model `OpenRouterModel` uzerinden denenir.
+- 400/408/429/5xx gibi gecici veya model kaynakli hatalarda `OpenRouterFallbackModels` sirayla denenir.
+- Basarili cevapta kullanilan modeli ve kisa test yanitini UI gunlugune dondurur.

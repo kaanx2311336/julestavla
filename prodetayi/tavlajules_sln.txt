@@ -1,0 +1,4 @@
+`TavlaJules.sln`, projenin Visual Studio/dotnet cozum dosyasidir.
+
+- `src/TavlaJules.App/TavlaJules.App.csproj` projesini icerir.
+- Derleme icin `dotnet build .\TavlaJules.sln` kullanilir.

@@ -1,0 +1,6 @@
+`ProjectSettingsService.cs`, ayarlarin okunup yazilmasindan sorumludur.
+
+- Ayarlar `%AppData%\TavlaJules\settings.json` yolunda JSON olarak tutulur.
+- Dosya yoksa guvenli varsayilanlarla baslar.
+- Bozuk JSON veya okuma hatasinda yeni varsayilan ayar nesnesi dondurur.
+- Hassas API anahtari bu serviste saklanmaz.
