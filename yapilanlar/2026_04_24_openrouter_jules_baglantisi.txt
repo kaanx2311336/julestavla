@@ -9,6 +9,9 @@ Yapilanlar:
 - `JulesCliService` eklendi; `jules.cmd version` testi ve `jules new --repo ...` remote session baslatma akisi hazirlandi.
 - Jules CLI baglantisi dogrulandi; `jules remote list --repo` icinde `kaanx2311336/julestavla` gorundu.
 - Yerel klasor Git reposu olarak baslatildi ve `origin` remote'u `https://github.com/kaanx2311336/julestavla.git` olarak eklendi.
+- Ilk commit `main` branch olarak GitHub'a push edildi.
+- Jules uzerinde ikinci faz icin remote session acildi: `14009672719483814558`.
+- Jules session URL: `https://jules.google.com/session/14009672719483814558`.
 
 Guvenlik notu:
 - API key bu log dosyasina yazilmadi.

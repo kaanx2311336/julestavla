@@ -1,0 +1,7 @@
+Jules session `14009672719483814558`, TavlaJules ikinci faz gorevidir.
+
+- URL: `https://jules.google.com/session/14009672719483814558`
+- Repo: `kaanx2311336/julestavla`
+- Gorev: mevcut WinForms kontrol panelini bozmadan saf C# tavla kural motoru class library ve mumkunse unit test projesi eklemek.
+- Kapsam: zar, pul hareketi, kirma/bar, kapali hane, toplama/bearing off ve kazanan kontrolu.
+- Jules'e `.env` veya secret dosyalarina dokunmamasi, prodetayi ve yapilanlar kayitlarini guncellemesi soylendi.
