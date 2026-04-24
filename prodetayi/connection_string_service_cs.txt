@@ -1,0 +1,6 @@
+`ConnectionStringService.cs`, Aiven MySQL URI bilgisini MySqlConnector connection string bicimine cevirir.
+
+- `mysql://user:password@host:port/database?ssl-mode=REQUIRED` formatini kabul eder.
+- Host, port, database, user ve password alanlarini URI'den ayiklar.
+- `SslMode=Required` ile Aiven baglantisini zorunlu SSL uzerinden kurar.
+- Zaten klasik connection string geldiyse aynen dondurur.

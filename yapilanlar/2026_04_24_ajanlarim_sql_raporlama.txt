@@ -1,0 +1,22 @@
+2026-04-24 - `tavlajules` ajanina Aiven `ajanlarim` SQL raporlama eklendi.
+
+Yapilanlar:
+- Ajan kimligi `AgentName=tavlajules` olarak ayarlandi.
+- `.env` icinde `AJANLARIM_MYSQL` desteklendi; connection string git'e alinmaz.
+- Aiven MySQL URI formatini MySqlConnector formatina ceviren `ConnectionStringService` eklendi.
+- `AgentSqlReporter` eklendi ve su tablolari olusturacak sekilde tasarlandi:
+  - `agent_registry`
+  - `agent_runs`
+  - `agent_events`
+  - `agent_jules_sessions`
+- `TavlaAgentService`, her dakikalik/manuel turda SQL'e run ve event raporu yazacak sekilde baglandi.
+- `MainForm`, Aiven alanini `ajanlarim` rapor DB olarak guncelledi.
+- `Program.cs` icine `--db-setup` komutu eklendi.
+- `Program.cs` icine tek tur ajan calistirmak icin `--agent-once` komutu eklendi.
+- `dotnet run --project .\src\TavlaJules.App\TavlaJules.App.csproj -- --db-setup` calistirildi ve Aiven DB'ye ilk setup raporu `agent_runs.id=1` olarak yazildi.
+- `--agent-once` ilk denemede OpenRouter primary/fallback model sorunlarini yakaladi; fallback uyumlulugu icin ajan talimatlari tek user mesajina alindi.
+- `--agent-once` ikinci denemede basarili calisti; SQL raporu `agent_runs.id=3` olarak yazildi ve yerel JSON raporu `agent_reports/2026_04_24_16_51_05_agent_report.json` olarak olustu.
+
+Guvenlik:
+- Aiven kullanici/parola bu loga yazilmadi.
+- SQL tablolari connection string veya secret saklamaz.

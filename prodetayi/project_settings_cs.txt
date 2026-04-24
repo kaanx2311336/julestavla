@@ -1,5 +1,6 @@
 `ProjectSettings.cs`, TavlaJules icin saklanan temel ayarlari modeller.
 
+- `AgentName`: SQL ve raporlama kimligi; varsayilan `tavlajules`.
 - `ProjectFolder`: tavlajules calisma klasoru.
 - `GitHubRepo`: Jules'in calisacagi GitHub repo slug'i (`kaanx2311336/julestavla`).
 - `JulesUrl`: Jules web adresi.

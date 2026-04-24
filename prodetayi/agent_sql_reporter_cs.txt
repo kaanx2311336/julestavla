@@ -1,0 +1,8 @@
+`AgentSqlReporter.cs`, `tavlajules` ajaninin Aiven `ajanlarim` DB raporlama servisidir.
+
+- Gerekirse su tablolari olusturur: `agent_registry`, `agent_runs`, `agent_events`, `agent_jules_sessions`.
+- `agent_registry` icinde `agent_name=tavlajules` kaydini upsert eder.
+- Her turu `agent_runs` tablosuna, her adimi `agent_events` tablosuna yazar.
+- Jules session listesinden parse edebildigi sessionlari `agent_jules_sessions` tablosuna upsert eder.
+- Tablo tasarimi ajan, zaman, status ve session uzerinden indexlendigi icin cok sayida ajan/run icin filtrelenebilir.
+- Secret veya connection string degerlerini tabloya yazmaz.

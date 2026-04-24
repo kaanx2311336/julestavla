@@ -2,6 +2,7 @@ namespace TavlaJules.App.Models;
 
 public sealed class ProjectSettings
 {
+    public string AgentName { get; set; } = "tavlajules";
     public string ProjectFolder { get; set; } = @"C:\Users\PC\Desktop\projeler\tavlajules";
     public string GitHubRepo { get; set; } = "kaanx2311336/julestavla";
     public string JulesUrl { get; set; } = "https://jules.google.com";

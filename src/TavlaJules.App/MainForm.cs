@@ -254,11 +254,11 @@ public sealed class MainForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
 
-        layout.Controls.Add(CreateInputGroup("Izlenen Jules session", sessionIdTextBox), 0, 0);
+        layout.Controls.Add(CreateInputGroup("tavlajules izlenen session", sessionIdTextBox), 0, 0);
         layout.Controls.Add(CreateDbConnectionGroup(), 1, 0);
 
         autoJulesCheckBox.Dock = DockStyle.Fill;
-        autoJulesCheckBox.Text = "Onerilen yeni Jules gorevini otomatik baslat";
+        autoJulesCheckBox.Text = "tavlajules onerirse yeni Jules gorevini otomatik baslat";
         autoJulesCheckBox.ForeColor = Color.FromArgb(162, 176, 205);
         autoJulesCheckBox.BackColor = Color.Transparent;
         layout.Controls.Add(autoJulesCheckBox, 0, 1);
@@ -363,7 +363,7 @@ public sealed class MainForm : Form
 
     private Control CreateDbConnectionGroup()
     {
-        var group = (TableLayoutPanel)CreateInputGroup("Aiven tavla_online MySQL", dbConnectionTextBox);
+        var group = (TableLayoutPanel)CreateInputGroup("Aiven ajanlarim MySQL", dbConnectionTextBox);
         dbConnectionTextBox.UseSystemPasswordChar = true;
         return group;
     }
@@ -472,6 +472,7 @@ public sealed class MainForm : Form
     {
         var values = new Dictionary<string, string>
         {
+            ["AGENT_NAME"] = settings.AgentName,
             ["OPENROUTER_MODEL"] = settings.OpenRouterModel,
             ["OPENROUTER_AGENT_MODEL"] = settings.AgentModel,
             ["OPENROUTER_FALLBACK_MODELS"] = settings.OpenRouterFallbackModels,
@@ -489,7 +490,7 @@ public sealed class MainForm : Form
         var typedDbConnection = dbConnectionTextBox.Text.Trim();
         if (!string.IsNullOrWhiteSpace(typedDbConnection))
         {
-            values["TAVLA_ONLINE_MYSQL"] = typedDbConnection;
+            values["AJANLARIM_MYSQL"] = typedDbConnection;
         }
 
         envFileService.UpsertValues(settings.ProjectFolder, values);
@@ -636,7 +637,7 @@ public sealed class MainForm : Form
             SaveEnvValues();
 
             var apiKey = envFileService.GetValue(settings.ProjectFolder, "OPENROUTER_API_KEY") ?? "";
-            var dbConnection = envFileService.GetValue(settings.ProjectFolder, "TAVLA_ONLINE_MYSQL");
+            var dbConnection = GetAgentDatabaseConnectionString();
 
             AppendLog("TavlaJules ajani tek tur basladi.");
             statusLabel.Text = "Ajan Jules ve OpenRouter kontrol ediyor...";
@@ -644,6 +645,7 @@ public sealed class MainForm : Form
 
             AppendLog($"Ajan modeli: {result.UsedModel}");
             AppendLog($"Ajan raporu: {result.ReportPath}");
+            AppendLog(result.SqlReportMessage);
             AppendLog(TrimForLog(result.Analysis));
 
             if (!string.IsNullOrWhiteSpace(result.NextPrompt))
@@ -677,8 +679,8 @@ public sealed class MainForm : Form
             settingsService.Save(settings);
             SaveEnvValues();
 
-            AppendLog("tavla_online DB testi basladi.");
-            var connectionString = envFileService.GetValue(settings.ProjectFolder, "TAVLA_ONLINE_MYSQL");
+            AppendLog("ajanlarim DB testi basladi.");
+            var connectionString = GetAgentDatabaseConnectionString();
             var result = await databaseHealthService.TestAsync(connectionString);
             AppendLog(result.Message);
             statusLabel.Text = result.IsSuccess ? "DB baglantisi tamam" : "DB baglantisi hazir degil";
@@ -764,8 +766,15 @@ public sealed class MainForm : Form
     private void UpdateDatabasePlaceholder()
     {
         dbConnectionTextBox.PlaceholderText = envFileService.HasValue(settings.ProjectFolder, "TAVLA_ONLINE_MYSQL")
-            ? "Mevcut .env DB baglantisi korunacak"
-            : "Server=...;Port=...;Database=tavla_online;Uid=...;Pwd=...;SslMode=Required";
+            || envFileService.HasValue(settings.ProjectFolder, "AJANLARIM_MYSQL")
+            ? "Mevcut .env ajanlarim baglantisi korunacak"
+            : "mysql://USER:PASSWORD@HOST:PORT/ajanlarim?ssl-mode=REQUIRED";
+    }
+
+    private string? GetAgentDatabaseConnectionString()
+    {
+        return envFileService.GetValue(settings.ProjectFolder, "AJANLARIM_MYSQL")
+            ?? envFileService.GetValue(settings.ProjectFolder, "TAVLA_ONLINE_MYSQL");
     }
 
     private static string CreateDefaultJulesPrompt()

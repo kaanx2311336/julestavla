@@ -12,13 +12,13 @@ public sealed class DatabaseHealthService
             return new DatabaseHealthResult
             {
                 IsConfigured = false,
-                Message = "TAVLA_ONLINE_MYSQL .env icinde tanimli degil."
+                Message = "AJANLARIM_MYSQL .env icinde tanimli degil."
             };
         }
 
         try
         {
-            await using var connection = new MySqlConnection(connectionString);
+            await using var connection = new MySqlConnection(ConnectionStringService.NormalizeMySql(connectionString));
             await connection.OpenAsync(cancellationToken);
 
             await using var command = connection.CreateCommand();
@@ -34,7 +34,7 @@ public sealed class DatabaseHealthService
                 IsConfigured = true,
                 IsSuccess = true,
                 TableCount = count,
-                Message = $"tavla_online baglantisi tamam. Tablo sayisi: {count}"
+                Message = $"ajanlarim baglantisi tamam. Tablo sayisi: {count}"
             };
         }
         catch (Exception exception)
@@ -43,7 +43,7 @@ public sealed class DatabaseHealthService
             {
                 IsConfigured = true,
                 IsSuccess = false,
-                Message = $"tavla_online baglanti hatasi: {exception.Message}"
+                Message = $"ajanlarim baglanti hatasi: {exception.Message}"
             };
         }
     }

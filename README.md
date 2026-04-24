@@ -24,10 +24,22 @@ dotnet publish .\src\TavlaJules.App\TavlaJules.App.csproj -c Release -r win-x64 
 
 API anahtarini `.env` icinde `OPENROUTER_API_KEY` olarak tut.
 
-`TAVLA_ONLINE_MYSQL` ornek bicim:
+`AJANLARIM_MYSQL` ornek bicim:
 
 ```text
-Server=HOST;Port=PORT;Database=tavla_online;Uid=USER;Pwd=PASSWORD;SslMode=Required
+mysql://USER:PASSWORD@HOST:PORT/ajanlarim?ssl-mode=REQUIRED
+```
+
+SQL rapor semasini WinForms acmadan kurmak:
+
+```powershell
+dotnet run --project .\src\TavlaJules.App\TavlaJules.App.csproj -- --db-setup
+```
+
+Tek ajan turunu WinForms acmadan calistirmak:
+
+```powershell
+dotnet run --project .\src\TavlaJules.App\TavlaJules.App.csproj -- --agent-once
 ```
 
 ## Dakikalik ajan
@@ -37,6 +49,7 @@ Paneldeki `Ajan baslat` dugmesi, her 60 saniyede:
 - Izlenen session tamamlandiysa `jules remote pull --session <id>` ile sonucu ceker, uygulamaz.
 - `prodetayi/` ve `yapilanlar/` hafizasini OpenRouter ajanina verir.
 - Sonraki Jules promptunu tasarlar ve `agent_reports/` altina JSON raporu yazar.
+- Aiven `ajanlarim` DB icinde `agent_runs` ve `agent_events` tablolarina rapor yazar.
 - Otomatik yeni Jules gorevi acma kutusu isaretli degilse sadece onerir.
 
 ## Jules

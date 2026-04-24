@@ -93,13 +93,14 @@ public sealed class OpenRouterClient
         request.Headers.TryAddWithoutValidation("HTTP-Referer", $"https://github.com/{settings.GitHubRepo}");
         request.Headers.TryAddWithoutValidation("X-Title", "TavlaJules");
 
-        var messages = new List<object>();
-        if (!string.IsNullOrWhiteSpace(systemPrompt))
-        {
-            messages.Add(new { role = "system", content = systemPrompt });
-        }
+        var userContent = string.IsNullOrWhiteSpace(systemPrompt)
+            ? userPrompt
+            : $"TALIMATLAR:\n{systemPrompt}\n\nGOREV VERISI:\n{userPrompt}";
 
-        messages.Add(new { role = "user", content = userPrompt });
+        var messages = new List<object>
+        {
+            new { role = "user", content = userContent }
+        };
 
         var payload = new
         {

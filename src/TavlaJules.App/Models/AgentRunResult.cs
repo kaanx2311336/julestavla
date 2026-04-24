@@ -9,5 +9,6 @@ public sealed class AgentRunResult
     public string ReportPath { get; init; } = "";
     public string JulesSessionsRaw { get; init; } = "";
     public string? PullOutput { get; init; }
+    public string SqlReportMessage { get; init; } = "";
     public CommandResult? AutoJulesSessionResult { get; init; }
 }

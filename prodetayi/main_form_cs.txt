@@ -7,8 +7,9 @@
 - OpenRouter baglanti testi yapar; primary model calismazsa fallback model zincirine duser.
 - Jules CLI version testi yapar ve `jules new --repo ...` ile remote session baslatabilir.
 - Jules icin duzenlenebilir gorev promptu alanini, faz planini ve calisma gunlugunu ekranda tutar.
-- `Ajan Ayarlari` bolumunde izlenecek Jules session ID, Aiven `tavla_online` MySQL connection string ve otomatik yeni Jules gorevi acma secenegi bulunur.
+- `Ajan Ayarlari` bolumunde izlenecek Jules session ID, Aiven `ajanlarim` MySQL connection string ve otomatik yeni Jules gorevi acma secenegi bulunur.
 - `Ajan baslat`, her 60 saniyede `TavlaAgentService` uzerinden Jules durumunu kontrol eder ve OpenRouter ajan raporu uretir.
 - `Ajan tek tur`, dakika beklemeden tek izleme/analiz turu calistirir.
-- `DB test`, `.env` icindeki `TAVLA_ONLINE_MYSQL` ile Aiven baglantisini test eder.
+- `DB test`, `.env` icindeki `AJANLARIM_MYSQL` ile Aiven baglantisini test eder.
+- Ajan tek tur tamamlandiginda UI gunlugune SQL rapor yazma sonucunu da basar.
 - Proje klasorunu ve GitHub reposunu dis uygulamada acabilir.

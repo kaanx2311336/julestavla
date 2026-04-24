@@ -7,3 +7,4 @@
 - `jules new --repo ...` ile remote Jules session baslatma ornegi verir.
 - Dakikalik ajanin Jules session listesini okudugunu, gerekirse pull yaptigini, OpenRouter ile sonraki promptu tasarladigini ve raporu `agent_reports/` altina yazdigini aciklar.
 - Aiven `tavla_online` MySQL connection string ornegini verir.
+- `--db-setup` ve `--agent-once` headless komutlarini belgeler.

@@ -7,4 +7,5 @@
 - OpenRouter endpoint'i `OPENROUTER_API_URL` alaninda tutulur.
 - Varsayilan Jules adresi `https://jules.google.com`.
 - Varsayilan GitHub repo `kaanx2311336/julestavla`.
-- Aiven `tavla_online` MySQL baglantisi `TAVLA_ONLINE_MYSQL` ile tutulur.
+- Aiven `ajanlarim` MySQL rapor baglantisi `AJANLARIM_MYSQL` ile tutulur.
+- Eski/oyun DB ayri tutulacaksa `TAVLA_ONLINE_MYSQL` sonradan oyun tarafina ayrilabilir.

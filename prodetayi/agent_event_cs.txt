@@ -1,0 +1,5 @@
+`AgentEvent.cs`, `tavlajules` ajaninin tek tur icindeki olay kaydidir.
+
+- `EventType`, `Severity`, `Message`, `MetadataJson` ve `CreatedAt` alanlarini tasir.
+- `agent_events` SQL tablosuna yazilir.
+- Jules okuma, DB saglik kontrolu, OpenRouter analizi, prompt hazirlama ve hata adimlari bu modelle izlenir.

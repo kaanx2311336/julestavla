@@ -2,4 +2,5 @@
 
 - Kullanilan model, analiz metni, onerilen sonraki Jules promptu ve rapor yolu tutulur.
 - Jules session listesi ve varsa pull ozeti saklanir.
+- SQL rapor yazma sonucu `SqlReportMessage` ile UI'a tasinir.
 - Otomatik Jules session acildiyse komut sonucu `AutoJulesSessionResult` ile tasinir.

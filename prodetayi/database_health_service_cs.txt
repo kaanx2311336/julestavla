@@ -1,5 +1,6 @@
-`DatabaseHealthService.cs`, Aiven `tavla_online` MySQL baglantisini test eder.
+`DatabaseHealthService.cs`, Aiven `ajanlarim` MySQL baglantisini test eder.
 
-- `.env` icindeki `TAVLA_ONLINE_MYSQL` connection string ile baglanir.
+- `.env` icindeki `AJANLARIM_MYSQL` connection string ile baglanir.
+- URI bicimini veya klasik MySQL connection string bicimini `ConnectionStringService` uzerinden kabul eder.
 - `information_schema.tables` uzerinden aktif database icin tablo sayisini okur.
 - Baglanti yoksa veya hataliysa secret degerleri loglamadan kisa durum mesajiyla doner.

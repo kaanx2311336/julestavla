@@ -3,3 +3,5 @@
 - .NET WinForms ApplicationConfiguration baslatilir.
 - Varsayilan form olarak `MainForm` acilir.
 - Uygulama Windows EXE hedefli `net9.0-windows` projesidir.
+- `--db-setup` argumani verilirse WinForms acmadan Aiven `ajanlarim` SQL rapor semasini kurar/dogrular ve `tavlajules` icin setup run kaydi yazar.
+- `--agent-once` argumani verilirse WinForms acmadan tek TavlaAgentService turu calistirir ve sonucu SQL'e yazar.

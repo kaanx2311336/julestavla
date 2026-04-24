@@ -1,0 +1,5 @@
+`AgentSqlRunReport.cs`, SQL'e yazilacak tek ajan turu ozetidir.
+
+- Run UUID, status, zamanlar, sure, model, Jules session ID ve GitHub repo alanlarini tasir.
+- OpenRouter JSONundan gelen durum ozeti, Jules'in yaptiklari, sonraki prompt, DB plani ve risk notlari burada tutulur.
+- `AgentSqlReporter` bu modeli `agent_runs` tablosuna yazar.
