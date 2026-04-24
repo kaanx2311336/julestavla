@@ -13,6 +13,9 @@
 - Her turu `AgentSqlReporter` ile Aiven `ajanlarim` DB icindeki `agent_runs`, `agent_events` ve `agent_jules_sessions` tablolarina yazar.
 - Her turdan sonra `AgentDashboardExporter` ile `ajanizleme/data/dashboard.json` ve `dashboard-data.js` dosyalarini gunceller.
 - `AllowAutoJulesSessions` true ise ve model de onay verirse yeni Jules session baslatabilir; varsayilan guvenli davranis yalnizca onermektir.
+- `jules remote list --session` ciktisinda `Awaiting User Feedback/Input` yakalanirsa bunu normal Planning degil, Jules'in soru sordugu durum olarak ayri raporlar.
+- Jules CLI mevcut session'a cevap/reply komutu sunmadigi icin `AutoRecoverAwaitingInputSessions` true ise bu soru icin bir kez netlestirilmis yeni Jules session acar.
+- Kurtarma session'i da `Awaiting User Feedback` durumuna duserse `AwaitingInputRecoverySessionIds` ile isaretlenir ve yeni kopya acilmaz; durum SQL/dashboard eventlerinde manuel cevap gerektiren blokaj gibi gorunur.
 - 2026-04-24 devam duzeltmesiyle `AutoContinueCompletedSessions` true ise izlenen Jules session `Completed` veya `Needs review` oldugunda model onayi beklemeden tek seferlik devam session'i acar.
 - Devam edilen completed session id'leri `AgentStateService` ile `agent_state/tavlajules.json` icinde tutulur; bu sayede ayni completed session icin dakika basi tekrar tekrar yeni Jules gorevi acilmaz.
 - Yeni Jules session id cikti icinden okunabilirse `settings.TrackedJulesSessionId` yeni id ile guncellenir ve sonraki turlar artik onu izler.

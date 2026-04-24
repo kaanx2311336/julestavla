@@ -69,27 +69,57 @@ public sealed class TavlaAgentService
                 && automation.TrackedSessionCompleted
                 && !automation.AutomationBlocked
                 && !agentStateService.HasHandledCompletedSession(settings, trackedSessionIdAtStart);
+            var shouldRecoverAwaitingInputSession = settings.AutoRecoverAwaitingInputSessions
+                && automation.TrackedSessionAwaitingInput
+                && !automation.AwaitingInputAlreadyHandled
+                && !automation.AutomationBlocked
+                && !string.IsNullOrWhiteSpace(automation.AwaitingInputRecoveryPrompt);
+            var promptToSend = shouldRecoverAwaitingInputSession ? automation.AwaitingInputRecoveryPrompt : nextPrompt;
             CommandResult? autoResult = null;
             var newJulesSessionId = "";
 
-            if (((settings.AllowAutoJulesSessions && shouldStart) || shouldContinueCompletedSession) && !string.IsNullOrWhiteSpace(nextPrompt))
+            if ((shouldRecoverAwaitingInputSession || (settings.AllowAutoJulesSessions && shouldStart) || shouldContinueCompletedSession)
+                && !string.IsNullOrWhiteSpace(promptToSend))
             {
-                if (agentStateService.HasSentPrompt(settings, nextPrompt))
+                if (agentStateService.HasSentPrompt(settings, promptToSend))
                 {
+                    if (shouldRecoverAwaitingInputSession)
+                    {
+                        newJulesSessionId = agentStateService.GetLastPromptSessionId(settings);
+                        agentStateService.MarkAwaitingInputSessionHandled(settings, trackedSessionIdAtStart, newJulesSessionId);
+
+                        if (!string.IsNullOrWhiteSpace(newJulesSessionId))
+                        {
+                            settings.TrackedJulesSessionId = newJulesSessionId;
+                        }
+                    }
+
                     events.Add(CreateEvent(
                         "duplicate_next_prompt_skipped",
                         "warning",
                         "Ayni Jules promptu daha once gonderildigi icin yeni session acilmadi.",
-                        new { trackedSessionIdAtStart }));
+                        new { trackedSessionIdAtStart, shouldRecoverAwaitingInputSession }));
                 }
                 else
                 {
-                    autoResult = await julesCliService.CreateSessionAsync(settings, nextPrompt, cancellationToken);
+                    autoResult = await julesCliService.CreateSessionAsync(settings, promptToSend, cancellationToken);
                     newJulesSessionId = AgentStateService.ParseSessionId(autoResult);
 
                     if (autoResult.IsSuccess)
                     {
-                        agentStateService.MarkPromptSent(settings, nextPrompt, newJulesSessionId);
+                        agentStateService.MarkPromptSent(settings, promptToSend, newJulesSessionId);
+                    }
+
+                    if (autoResult.IsSuccess && shouldRecoverAwaitingInputSession)
+                    {
+                        automation.AwaitingInputRecoveryStarted = true;
+                        agentStateService.MarkAwaitingInputSessionHandled(settings, trackedSessionIdAtStart, newJulesSessionId);
+                        agentStateService.MarkAwaitingInputRecoverySession(settings, newJulesSessionId);
+
+                        if (!string.IsNullOrWhiteSpace(newJulesSessionId))
+                        {
+                            settings.TrackedJulesSessionId = newJulesSessionId;
+                        }
                     }
 
                     if (autoResult.IsSuccess && shouldContinueCompletedSession)
@@ -106,8 +136,18 @@ public sealed class TavlaAgentService
                         "auto_jules_session_created",
                         autoResult.IsSuccess ? "info" : "error",
                         "Ajan otomatik Jules session denemesi yapti.",
-                        new { autoResult.ExitCode, continuedFromSessionId = trackedSessionIdAtStart, newJulesSessionId, shouldContinueCompletedSession }));
+                        new { autoResult.ExitCode, continuedFromSessionId = trackedSessionIdAtStart, newJulesSessionId, shouldContinueCompletedSession, shouldRecoverAwaitingInputSession }));
                 }
+            }
+            else if (automation.TrackedSessionAwaitingInput)
+            {
+                events.Add(CreateEvent(
+                    "jules_awaiting_input_observed",
+                    automation.AwaitingInputAlreadyHandled ? "info" : "warning",
+                    automation.AwaitingInputAlreadyHandled
+                        ? "Izlenen Jules session daha once input bekliyor diye ele alindi."
+                        : "Izlenen Jules session kullanici girdisi bekliyor; otomatik kurtarma kapali veya uygun degil.",
+                    new { trackedSessionIdAtStart, settings.AutoRecoverAwaitingInputSessions, automation.AwaitingInputAlreadyHandled }));
             }
             else if (automation.TrackedSessionCompleted && !shouldContinueCompletedSession)
             {
@@ -178,7 +218,8 @@ public sealed class TavlaAgentService
     {
         var automation = new AgentAutomationArtifacts
         {
-            TrackedSessionCompleted = IsTrackedSessionCompleted(sessionsOutput, trackedSessionId)
+            TrackedSessionCompleted = IsTrackedSessionCompleted(sessionsOutput, trackedSessionId),
+            TrackedSessionAwaitingInput = IsTrackedSessionAwaitingInput(sessionsOutput, trackedSessionId)
         };
 
         if (string.IsNullOrWhiteSpace(trackedSessionId))
@@ -190,6 +231,35 @@ public sealed class TavlaAgentService
         if (!sessionsOutput.Contains(trackedSessionId, StringComparison.Ordinal))
         {
             automation.Summary = "Izlenen Jules session listede bulunamadi; otomasyon beklemede.";
+            return automation;
+        }
+
+        if (automation.TrackedSessionAwaitingInput)
+        {
+            automation.AwaitingInputRecoverySession =
+                agentStateService.HasAwaitingInputRecoverySession(settings, trackedSessionId)
+                || IsLikelyAwaitingInputRecoverySession(sessionsOutput, trackedSessionId);
+            if (automation.AwaitingInputRecoverySession)
+            {
+                agentStateService.MarkAwaitingInputRecoverySession(settings, trackedSessionId);
+            }
+
+            automation.AwaitingInputAlreadyHandled =
+                automation.AwaitingInputRecoverySession
+                || agentStateService.HasHandledAwaitingInputSession(settings, trackedSessionId);
+            automation.AwaitingInputRecoveryPrompt = automation.AwaitingInputRecoverySession
+                ? ""
+                : BuildAwaitingInputRecoveryPrompt(settings, trackedSessionId, sessionsOutput);
+            automation.Summary = automation.AwaitingInputRecoverySession
+                ? "Izlenen Jules kurtarma session'i de kullanici girdisi bekliyor; CLI reply destegi olmadigi icin yeni kopya acilmayacak."
+                : automation.AwaitingInputAlreadyHandled
+                    ? "Izlenen Jules session kullanici girdisi bekliyor; bu session icin kurtarma gorevi daha once acildi."
+                    : "Izlenen Jules session kullanici girdisi bekliyor; CLI reply destegi olmadigi icin netlestirilmis yeni Jules gorevi hazirlandi.";
+            events.Add(CreateEvent(
+                "jules_awaiting_input_detected",
+                automation.AwaitingInputAlreadyHandled ? "info" : "warning",
+                automation.Summary,
+                new { trackedSessionId, settings.AutoRecoverAwaitingInputSessions, automation.AwaitingInputAlreadyHandled, automation.AwaitingInputRecoverySession }));
             return automation;
         }
 
@@ -457,7 +527,57 @@ public sealed class TavlaAgentService
             return false;
         }
 
-        return Regex.IsMatch(sessionsOutput, trackedSessionId + @".*(Completed|Needs\s+review)", RegexOptions.IgnoreCase);
+        return Regex.IsMatch(sessionsOutput, Regex.Escape(trackedSessionId) + @".*(Completed|Needs\s+review)", RegexOptions.IgnoreCase);
+    }
+
+    private static bool IsTrackedSessionAwaitingInput(string sessionsOutput, string trackedSessionId)
+    {
+        if (string.IsNullOrWhiteSpace(trackedSessionId))
+        {
+            return false;
+        }
+
+        return Regex.IsMatch(
+            sessionsOutput,
+            Regex.Escape(trackedSessionId) + @".*(Awaiting\s+User|Awaiting\s+.*Feedback|User\s+Feedback|Needs\s+input|Waiting\s+for\s+.*input)",
+            RegexOptions.IgnoreCase);
+    }
+
+    private static bool IsLikelyAwaitingInputRecoverySession(string sessionsOutput, string trackedSessionId)
+    {
+        var description = NormalizeSessionDescription(TryGetSessionDescription(sessionsOutput, trackedSessionId));
+        return description.Contains("previous session", StringComparison.Ordinal)
+            && description.Contains("waiting for", StringComparison.Ordinal);
+    }
+
+    private static string BuildAwaitingInputRecoveryPrompt(ProjectSettings settings, string trackedSessionId, string sessionsOutput)
+    {
+        var originalDescription = TryGetSessionDescription(sessionsOutput, trackedSessionId);
+        return $"""
+        Jules, implement this exact TavlaJules engine task for repo {settings.GitHubRepo}. Do not ask another clarification question; if a small detail is missing, use the conservative existing engine behavior.
+
+        Context:
+        Previous session {trackedSessionId} waited for user feedback because the GameEngine task was too vague. This prompt is the clarification.
+
+        Original vague task:
+        {originalDescription}
+
+        Goal:
+        Extend `src/TavlaJules.Engine/Engine/GameEngine.cs` with a small turn orchestration layer for the existing tavla/backgammon engine.
+
+        Scope:
+        - Read the relevant `prodetayi/` summaries before editing.
+        - Keep the existing `Board`, `Move`, `PlayerColor` and `MoveValidator` classes; do not rewrite them.
+        - Add explicit dice state to `GameEngine`: current dice values, remaining dice/moves, and a `StartTurn(PlayerColor player, int die1, int die2)` style API.
+        - Make `ApplyMove` consume a matching remaining die instead of always inferring and immediately switching turn after one move.
+        - Add a `IsTurnComplete`/similar property or method and switch turn only when the current turn has no remaining dice.
+        - Preserve current hit, bar and bearing-off behavior already present in `GameEngine`.
+        - Keep the change around 100-500 lines and focused on engine/tests only.
+        - Add or update tests in `src/TavlaJules.Engine.Tests/Engine/GameEngineTests.cs` for dice consumption, invalid dice distance, and turn switch after dice are consumed.
+        - Update `prodetayi/GameEngine.md` and add one dated `yapilanlar/` note describing the completed work.
+        - Run or at least keep the repo compatible with `dotnet build` and `dotnet test`.
+        - Do not include secrets, .env values, API keys, or database passwords.
+        """;
     }
 
     private static string BuildSystemPrompt(ProjectSettings settings)
@@ -469,6 +589,7 @@ public sealed class TavlaAgentService
         Gorevin Jules'in son durumunu, yerel proje hafizasini, GitHub hedefini ve ajanlarim SQL rapor durumunu okuyup bir sonraki en dogru adimi tasarlamaktir.
         Ajan dongusu su sekildedir: Jules durumunu oku, tamamlanan isi apply/dogrula/raporla, mevcut repo durumuna gore tek ve uygulanabilir sonraki promptu tasarla, sonra bir sonraki Jules session'a devam et.
         Jules henuz Planning veya In Progress ise yeni session isteme; sadece mevcut anlik durumu raporla.
+        Jules Awaiting User Feedback/Input durumundaysa bunu bekleyen soru olarak raporla; tavlajules bu durumda netlestirilmis kurtarma promptu uretebilir.
         Completed is apply/dogrulama/commit/push ile guvenli hale geldiyse nextPrompt bir sonraki kucuk faz olsun.
         nextPrompt mutlaka dosya/modul bazli, test/dogrulama beklentili, 100-500 satir bandinda ve mevcut prodetayi/yapilanlar disiplinine uygun olsun.
         Proje, kullanicinin daha once yaptigi Batak projesine benzer sekilde fazli, loglu, prodetayi hafizali ve Jules destekli ilerlemelidir.
@@ -516,8 +637,12 @@ public sealed class TavlaAgentService
     {
         var content = JsonSerializer.Serialize(new
         {
-            statusSummary = "OpenRouter free modelleri gecici olarak kullanilamadi; tavlajules yerel durum raporu yazdi ve yeni Jules promptu gondermedi.",
-            whatJulesDid = sessionsOutput.Contains("In Progress", StringComparison.OrdinalIgnoreCase)
+            statusSummary = automation.TrackedSessionAwaitingInput
+                ? "OpenRouter kullanilamadi; izlenen Jules session kullanici girdisi bekliyor ve yerel kurtarma akisi devreye alinabilir."
+                : "OpenRouter free modelleri gecici olarak kullanilamadi; tavlajules yerel durum raporu yazdi ve yeni Jules promptu gondermedi.",
+            whatJulesDid = automation.TrackedSessionAwaitingInput
+                ? "Izlenen Jules session kullanici girdisi bekliyor; tavlajules netlestirilmis yeni gorev hazirlayacak."
+                : sessionsOutput.Contains("In Progress", StringComparison.OrdinalIgnoreCase)
                 ? "Izlenen TavlaJules Jules session'i hala devam ediyor."
                 : string.IsNullOrWhiteSpace(automation.Summary)
                     ? "TavlaJules Jules session durumu okundu; detay icin agent_jules_sessions ve agent_events tablolarina bak."
@@ -728,6 +853,10 @@ public sealed class TavlaAgentService
         var lines = new List<string>
         {
             $"trackedCompleted={automation.TrackedSessionCompleted}",
+            $"trackedAwaitingInput={automation.TrackedSessionAwaitingInput}",
+            $"awaitingInputAlreadyHandled={automation.AwaitingInputAlreadyHandled}",
+            $"awaitingInputRecoveryStarted={automation.AwaitingInputRecoveryStarted}",
+            $"awaitingInputRecoverySession={automation.AwaitingInputRecoverySession}",
             $"appliedThisTurn={automation.AppliedThisTurn}",
             $"alreadyApplied={automation.AlreadyApplied}",
             $"duplicateCompletedSession={automation.DuplicateCompletedSession}",

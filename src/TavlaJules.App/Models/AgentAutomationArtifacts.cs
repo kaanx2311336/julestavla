@@ -7,9 +7,14 @@ public sealed class AgentAutomationArtifacts
     public bool AlreadyApplied { get; set; }
     public bool DuplicateCompletedSession { get; set; }
     public bool ResumedDirtyWorkspace { get; set; }
+    public bool TrackedSessionAwaitingInput { get; set; }
+    public bool AwaitingInputAlreadyHandled { get; set; }
+    public bool AwaitingInputRecoveryStarted { get; set; }
+    public bool AwaitingInputRecoverySession { get; set; }
     public bool AutomationBlocked { get; set; }
     public string Summary { get; set; } = "";
     public string DuplicateOfSessionId { get; set; } = "";
+    public string AwaitingInputRecoveryPrompt { get; set; } = "";
     public CommandResult? GitStatusBeforeApply { get; set; }
     public CommandResult? JulesPullResult { get; set; }
     public CommandResult? JulesApplyResult { get; set; }

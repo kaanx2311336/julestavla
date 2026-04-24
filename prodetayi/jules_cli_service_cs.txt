@@ -4,5 +4,6 @@
 - `CreateSessionAsync`, `jules.cmd new --repo <repo> "<prompt>"` ile Jules remote session baslatir.
 - `ListSessionsAsync`, `jules.cmd remote list --session` ile tum Jules session durumlarini okur.
 - `PullSessionAsync`, `jules.cmd remote pull --session <id>` ile tamamlanan session sonucunu ceker; `apply` true verilirse patch'i uygular.
+- 2026-04-24 kontrolunde Jules CLI'nin mevcut session'a sohbet cevabi/reply gonderen bir komutu olmadigi goruldu; `Awaiting User Feedback` durumlari `TavlaAgentService` tarafinda yeni netlestirilmis session veya manuel blokaj olarak ele alinir.
 - Komutlar proje klasoru calisma diziniyle calisir.
 - Standart cikti, hata cikisi ve exit code `CommandResult` olarak UI'a tasinir.

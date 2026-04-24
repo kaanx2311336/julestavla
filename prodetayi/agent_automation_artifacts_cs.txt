@@ -2,6 +2,10 @@
 
 - Izlenen session'in completed olup olmadigini, patch'in bu tur apply edilip edilmedigini ve otomasyonun bloklanip bloklanmadigini tutar.
 - Duplicate completed session ve dirty workspace recovery durumlarini ayri bayraklarla raporlar.
+- `TrackedSessionAwaitingInput`, Jules CLI'da `Awaiting User Feedback` gibi gorunen bekleyen soru durumlarini raporlar.
+- `AwaitingInputRecoveryStarted`, bu bekleyen soru icin netlestirilmis yeni Jules session acildigini gosterir.
+- `AwaitingInputRecoverySession`, netlestirme icin acilan yeni session'in da input bekledigini isaretler; bu durumda yeni kopya acilmaz.
+- `AwaitingInputRecoveryPrompt`, CLI reply destegi olmadiginda acilacak netlestirilmis kurtarma promptunu tutar.
 - `JulesPullResult` ve `JulesApplyResult`, Jules CLI pull/apply ciktilarini saklar.
 - `VerificationBuildResult` ve `VerificationTestResult`, apply sonrasi `dotnet build` ve `dotnet test` sonucunu saklar.
 - `GitStageResult`, `SecretScanResult`, `GitCommitResult` ve `GitPushResult`, dogrulanmis degisikligin GitHub'a guvenli gonderim surecini raporlar.

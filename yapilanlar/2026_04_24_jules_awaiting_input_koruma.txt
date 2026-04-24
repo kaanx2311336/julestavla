@@ -1,0 +1,7 @@
+TavlaJules ajaninda Jules'in soru sorma durumu icin koruma eklendi.
+
+- `jules remote list --session` ciktisinda `Awaiting User Feedback/Input` durumlari artik normal Planning gibi ele alinmiyor.
+- Input bekleyen izlenen session icin bir kez netlestirilmis yeni Jules gorevi aciliyor.
+- Bu kurtarma session'i da input beklerse tekrar yeni kopya acilmiyor; olay SQL/dashboard raporlarinda gorunur kaliyor.
+- `AgentStateService`, handled awaiting input session id'lerini ve recovery session id'lerini `agent_state/tavlajules.json` icinde tutuyor.
+- Dogrulama icin `dotnet build` ve `dotnet test` basarili calistirildi.
