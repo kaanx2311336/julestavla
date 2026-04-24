@@ -1,0 +1,14 @@
+2026-04-24 18:15
+
+TavlaJules ajaninin completed Jules session sonrasi durup sadece rapor yazmasi duzeltildi.
+
+- `AutoContinueCompletedSessions` ayari eklendi ve varsayilan true yapildi.
+- WinForms ajan sekmesine "Completed session sonrasi devam gorevi ac" secenegi eklendi.
+- `AgentStateService` eklendi; tamamlanmis session id'leri `agent_state/tavlajules.json` icinde tekrar korumasi icin tutuluyor.
+- `TavlaAgentService`, izlenen session `Completed` veya `Needs review` oldugunda OpenRouter modelinin `shouldStartNewJulesSession` cevabini beklemeden tek devam session'i aciyor.
+- Yeni Jules session id okunursa UI ve headless calistirma ayarlari otomatik guncelleniyor.
+
+Test:
+- `dotnet build .\TavlaJules.sln -c Release` basarili, 0 hata.
+- `dotnet .\src\TavlaJules.App\bin\Release\net9.0-windows\TavlaJules.App.dll --agent-once` yeni Jules session `18134383091434973361` olusturdu ve SQL'e `agent_runs.id=60` yazdi.
+- Ikinci `--agent-once` turu yeni session tekrar acmadi; `18134383091434973361` Planning olarak izlenmeye devam etti ve SQL'e `agent_runs.id=61` yazdi.

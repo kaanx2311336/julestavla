@@ -11,8 +11,10 @@
 - Jules icin duzenlenebilir gorev promptu alanini, faz planini ve calisma gunlugunu ekranda tutar.
 - Sag panelde `Yol Haritasi`, `Ajan`, `Jules Prompt` ve `Gunluk` sekmeleri bulunur; boylece kucuk ekranlarda alanlar birbirini ezmez.
 - `Ajan Ayarlari` bolumunde izlenecek Jules session ID, Aiven `ajanlarim` MySQL connection string ve otomatik yeni Jules gorevi acma secenegi bulunur.
+- `Completed session sonrasi devam gorevi ac` secenegi, tamamlanan izlenen Jules isinden sonra otomatik tek devam gorevi acilmasini kontrol eder.
 - `Ajan baslat`, her 60 saniyede `TavlaAgentService` uzerinden Jules durumunu kontrol eder ve OpenRouter ajan raporu uretir.
 - `Ajan tek tur`, dakika beklemeden tek izleme/analiz turu calistirir.
 - `DB test`, `.env` icindeki `AJANLARIM_MYSQL` ile Aiven baglantisini test eder.
 - Ajan tek tur tamamlandiginda UI gunlugune SQL rapor yazma sonucunu da basar.
+- Ajan yeni Jules session olusturursa UI'daki izlenen session id otomatik yeni id ile guncellenir ve ayarlara kaydedilir.
 - Proje klasorunu ve GitHub reposunu dis uygulamada acabilir.

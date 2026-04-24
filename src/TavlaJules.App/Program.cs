@@ -86,6 +86,13 @@ static class Program
         try
         {
             var result = await new Services.TavlaAgentService().RunOnceAsync(settings, apiKey, connectionString);
+            if (!string.IsNullOrWhiteSpace(result.NewJulesSessionId))
+            {
+                settings.TrackedJulesSessionId = result.NewJulesSessionId;
+                settingsService.Save(settings);
+                Console.WriteLine($"Yeni Jules session: {result.NewJulesSessionId}");
+            }
+
             Console.WriteLine(result.SqlReportMessage);
             Console.WriteLine(result.ReportPath);
             return 0;

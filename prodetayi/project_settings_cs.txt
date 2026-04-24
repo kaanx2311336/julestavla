@@ -12,4 +12,5 @@
 - `AgentIntervalSeconds`: ajan periyodu; varsayilan 60 saniye.
 - `TrackedJulesSessionId`: dakika basi izlenecek Jules session ID.
 - `AllowAutoJulesSessions`: true olursa ajan, modelin onerisine gore yeni Jules session acabilir.
+- `AutoContinueCompletedSessions`: true olursa izlenen Jules session tamamlandiginda ajan tek seferlik devam session'i acar; varsayilan true.
 - `Goal`: projenin genel hedef metni.

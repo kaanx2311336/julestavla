@@ -11,6 +11,7 @@ public sealed class TavlaAgentService
     private readonly DatabaseHealthService databaseHealthService = new();
     private readonly AgentSqlReporter agentSqlReporter = new();
     private readonly AgentDashboardExporter dashboardExporter = new();
+    private readonly AgentStateService agentStateService = new();
 
     public async Task<AgentRunResult> RunOnceAsync(
         ProjectSettings settings,
@@ -29,6 +30,7 @@ public sealed class TavlaAgentService
         {
             var sessions = await julesCliService.ListSessionsAsync(settings, cancellationToken);
             events.Add(CreateEvent("jules_sessions_read", "info", "Jules session listesi okundu.", new { exitCode = sessions.ExitCode }));
+            var trackedSessionIdAtStart = settings.TrackedJulesSessionId;
             var relevantSessionsOutput = FilterRelevantSessions(sessions.Output, settings);
 
             var pullOutput = await TryPullTrackedSessionAsync(settings, relevantSessionsOutput, events, cancellationToken);
@@ -61,12 +63,41 @@ public sealed class TavlaAgentService
 
             var nextPrompt = ExtractString(completion.Content, "nextPrompt");
             var shouldStart = ExtractBool(completion.Content, "shouldStartNewJulesSession");
+            var trackedSessionCompleted = IsTrackedSessionCompleted(relevantSessionsOutput, trackedSessionIdAtStart);
+            var shouldContinueCompletedSession = settings.AutoContinueCompletedSessions
+                && trackedSessionCompleted
+                && !agentStateService.HasHandledCompletedSession(settings, trackedSessionIdAtStart);
             CommandResult? autoResult = null;
+            var newJulesSessionId = "";
 
-            if (settings.AllowAutoJulesSessions && shouldStart && !string.IsNullOrWhiteSpace(nextPrompt))
+            if (((settings.AllowAutoJulesSessions && shouldStart) || shouldContinueCompletedSession) && !string.IsNullOrWhiteSpace(nextPrompt))
             {
                 autoResult = await julesCliService.CreateSessionAsync(settings, nextPrompt, cancellationToken);
-                events.Add(CreateEvent("auto_jules_session_created", autoResult.IsSuccess ? "info" : "error", "Ajan otomatik Jules session denemesi yapti.", new { autoResult.ExitCode }));
+                newJulesSessionId = AgentStateService.ParseSessionId(autoResult);
+
+                if (autoResult.IsSuccess && shouldContinueCompletedSession)
+                {
+                    agentStateService.MarkCompletedSessionHandled(settings, trackedSessionIdAtStart, newJulesSessionId);
+
+                    if (!string.IsNullOrWhiteSpace(newJulesSessionId))
+                    {
+                        settings.TrackedJulesSessionId = newJulesSessionId;
+                    }
+                }
+
+                events.Add(CreateEvent(
+                    "auto_jules_session_created",
+                    autoResult.IsSuccess ? "info" : "error",
+                    "Ajan otomatik Jules session denemesi yapti.",
+                    new { autoResult.ExitCode, continuedFromSessionId = trackedSessionIdAtStart, newJulesSessionId, shouldContinueCompletedSession }));
+            }
+            else if (trackedSessionCompleted && !shouldContinueCompletedSession)
+            {
+                events.Add(CreateEvent(
+                    "completed_session_already_handled",
+                    "info",
+                    "Izlenen completed Jules session daha once devam ettirildi veya otomatik devam kapali.",
+                    new { trackedSessionIdAtStart, settings.AutoContinueCompletedSessions }));
             }
             else
             {
@@ -89,6 +120,7 @@ public sealed class TavlaAgentService
                 JulesSessionsRaw = relevantSessionsOutput,
                 PullOutput = pullOutput,
                 SqlReportMessage = sqlMessage,
+                NewJulesSessionId = newJulesSessionId,
                 AutoJulesSessionResult = autoResult
             };
         }
@@ -137,6 +169,16 @@ public sealed class TavlaAgentService
         var pull = await julesCliService.PullSessionAsync(settings, settings.TrackedJulesSessionId, apply: false, cancellationToken);
         events.Add(CreateEvent("jules_session_pulled", pull.IsSuccess ? "info" : "error", "Izlenen Jules session pull sonucu alindi.", new { settings.TrackedJulesSessionId, pull.ExitCode }));
         return string.IsNullOrWhiteSpace(pull.Output) ? pull.Error : pull.Output;
+    }
+
+    private static bool IsTrackedSessionCompleted(string sessionsOutput, string trackedSessionId)
+    {
+        if (string.IsNullOrWhiteSpace(trackedSessionId))
+        {
+            return false;
+        }
+
+        return Regex.IsMatch(sessionsOutput, trackedSessionId + @".*(Completed|Needs\s+review)", RegexOptions.IgnoreCase);
     }
 
     private static string BuildSystemPrompt(ProjectSettings settings)

@@ -24,6 +24,7 @@ public sealed class MainForm : Form
     private readonly TextBox sessionIdTextBox = new();
     private readonly TextBox dbConnectionTextBox = new();
     private readonly CheckBox autoJulesCheckBox = new();
+    private readonly CheckBox autoContinueCheckBox = new();
     private readonly TextBox goalTextBox = new();
     private readonly TextBox julesPromptTextBox = new();
     private readonly ListView phaseListView = new();
@@ -279,13 +280,14 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 3,
+            RowCount = 4,
             BackColor = Color.Transparent
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
 
         layout.Controls.Add(CreateInputGroup("tavlajules izlenen session", sessionIdTextBox), 0, 0);
@@ -299,6 +301,13 @@ public sealed class MainForm : Form
 
         var intervalLabel = CreateHintLabel($"Ajan araligi: {settings.AgentIntervalSeconds} saniye");
         layout.Controls.Add(intervalLabel, 1, 1);
+
+        autoContinueCheckBox.Dock = DockStyle.Fill;
+        autoContinueCheckBox.Text = "Completed session sonrasi devam gorevi ac";
+        autoContinueCheckBox.ForeColor = Color.FromArgb(162, 176, 205);
+        autoContinueCheckBox.BackColor = Color.Transparent;
+        layout.SetColumnSpan(autoContinueCheckBox, 2);
+        layout.Controls.Add(autoContinueCheckBox, 0, 2);
 
         var buttons = new TableLayoutPanel
         {
@@ -325,7 +334,7 @@ public sealed class MainForm : Form
         buttons.Controls.Add(CreateButton("Ajan tek tur", async (_, _) => await RunAgentOnceAsync()), 1, 0);
         buttons.Controls.Add(CreateButton("DB test", async (_, _) => await TestDatabaseAsync()), 2, 0);
         layout.SetColumnSpan(buttons, 2);
-        layout.Controls.Add(buttons, 0, 2);
+        layout.Controls.Add(buttons, 0, 3);
 
         return layout;
     }
@@ -476,6 +485,7 @@ public sealed class MainForm : Form
         fallbackModelsTextBox.Text = settings.OpenRouterFallbackModels;
         sessionIdTextBox.Text = settings.TrackedJulesSessionId;
         autoJulesCheckBox.Checked = settings.AllowAutoJulesSessions;
+        autoContinueCheckBox.Checked = settings.AutoContinueCompletedSessions;
         goalTextBox.Text = settings.Goal;
         UpdateApiKeyPlaceholder();
         UpdateDatabasePlaceholder();
@@ -491,6 +501,7 @@ public sealed class MainForm : Form
         settings.AgentModel = settings.OpenRouterModel;
         settings.TrackedJulesSessionId = sessionIdTextBox.Text.Trim();
         settings.AllowAutoJulesSessions = autoJulesCheckBox.Checked;
+        settings.AutoContinueCompletedSessions = autoContinueCheckBox.Checked;
         settings.Goal = goalTextBox.Text.Trim();
     }
 
@@ -692,6 +703,14 @@ public sealed class MainForm : Form
             if (result.AutoJulesSessionResult is not null)
             {
                 AppendCommandResult("Ajan otomatik Jules gorevi", result.AutoJulesSessionResult);
+            }
+
+            if (!string.IsNullOrWhiteSpace(result.NewJulesSessionId))
+            {
+                settings.TrackedJulesSessionId = result.NewJulesSessionId;
+                sessionIdTextBox.Text = result.NewJulesSessionId;
+                settingsService.Save(settings);
+                AppendLog($"Izlenen Jules session guncellendi: {result.NewJulesSessionId}");
             }
 
             statusLabel.Text = "Ajan turu tamamlandi";

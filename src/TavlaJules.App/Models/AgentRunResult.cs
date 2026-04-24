@@ -10,5 +10,6 @@ public sealed class AgentRunResult
     public string JulesSessionsRaw { get; init; } = "";
     public string? PullOutput { get; init; }
     public string SqlReportMessage { get; init; } = "";
+    public string NewJulesSessionId { get; init; } = "";
     public CommandResult? AutoJulesSessionResult { get; init; }
 }
