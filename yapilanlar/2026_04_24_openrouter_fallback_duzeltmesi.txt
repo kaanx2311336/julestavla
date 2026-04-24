@@ -1,0 +1,18 @@
+2026-04-24 - OpenRouter fallback ve TavlaJules baglam duzeltmesi.
+
+Sorun:
+- Ajan logunda `qwen/qwen3-coder:free` gorunuyordu; sebep fallback zincirinde qwen modelinin bulunmasiydi.
+- OpenRouter free provider'lari ayni anda 503/429 verdiginde ajan turu ekranda basarisiz gorunuyordu.
+- Jules session listesinde eski Batak sessionlari da modele verildigi icin model bazen FAZ 95 gibi yanlis baglam uretirdi.
+
+Yapilanlar:
+- Varsayilan fallback zincirinden `qwen/qwen3-coder:free` cikarildi.
+- Eski `%AppData%\TavlaJules\settings.json` icinde qwen varsa `ProjectSettingsService` yukleme sirasinda temizler.
+- Fallback model alani UI'da gorunur ve duzenlenebilir hale getirildi.
+- OpenRouter cevabi ```json fence ile gelirse sade JSON olarak temizleniyor.
+- TavlaAgentService, Jules session listesini yalnizca TavlaJules repo/session satirlariyla sinirlandiriyor.
+- OpenRouter tamamen doluysa ajan `local-degraded` rapor uretip SQL'e yazmaya devam ediyor.
+
+Sonuc:
+- qwen artik varsayilan olarak denenmez.
+- Ajan, OpenRouter gecici olarak kullanilamazken bile `agent_runs` / `agent_events` tablolarina durum raporu yazabilir.

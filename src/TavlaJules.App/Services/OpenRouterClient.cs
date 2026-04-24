@@ -131,7 +131,7 @@ public sealed class OpenRouterClient
             .GetProperty("content")
             .GetString();
 
-        return string.IsNullOrWhiteSpace(content) ? "Baglanti basarili, bos yanit geldi." : content.Trim();
+        return string.IsNullOrWhiteSpace(content) ? "Baglanti basarili, bos yanit geldi." : CleanModelContent(content);
     }
 
     private static IReadOnlyList<string> GetModelChain(ProjectSettings settings, string? preferredModel = null)
@@ -164,6 +164,24 @@ public sealed class OpenRouterClient
     {
         const int maxLength = 500;
         return value.Length <= maxLength ? value : value[..maxLength] + "...";
+    }
+
+    private static string CleanModelContent(string content)
+    {
+        content = content.Trim();
+
+        if (content.StartsWith("```", StringComparison.Ordinal))
+        {
+            var firstLineEnd = content.IndexOf('\n');
+            var lastFence = content.LastIndexOf("```", StringComparison.Ordinal);
+
+            if (firstLineEnd >= 0 && lastFence > firstLineEnd)
+            {
+                content = content[(firstLineEnd + 1)..lastFence].Trim();
+            }
+        }
+
+        return content;
     }
 
     private sealed class OpenRouterRequestException(string message, bool isRetryable) : Exception(message)

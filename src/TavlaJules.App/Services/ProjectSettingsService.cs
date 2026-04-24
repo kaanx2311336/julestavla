@@ -30,7 +30,7 @@ public sealed class ProjectSettingsService
         try
         {
             var json = File.ReadAllText(settingsPath);
-            return JsonSerializer.Deserialize<ProjectSettings>(json, JsonOptions) ?? new ProjectSettings();
+            return Normalize(JsonSerializer.Deserialize<ProjectSettings>(json, JsonOptions) ?? new ProjectSettings());
         }
         catch
         {
@@ -43,5 +43,21 @@ public sealed class ProjectSettingsService
         Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
         var json = JsonSerializer.Serialize(settings, JsonOptions);
         File.WriteAllText(settingsPath, json);
+    }
+
+    private static ProjectSettings Normalize(ProjectSettings settings)
+    {
+        settings.OpenRouterFallbackModels = string.Join(
+            ',',
+            settings.OpenRouterFallbackModels
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(model => !model.Equals("qwen/qwen3-coder:free", StringComparison.OrdinalIgnoreCase)));
+
+        if (string.IsNullOrWhiteSpace(settings.OpenRouterFallbackModels))
+        {
+            settings.OpenRouterFallbackModels = "google/gemma-3n-e2b-it:free";
+        }
+
+        return settings;
     }
 }

@@ -28,8 +28,9 @@ public sealed class TavlaAgentService
         {
             var sessions = await julesCliService.ListSessionsAsync(settings, cancellationToken);
             events.Add(CreateEvent("jules_sessions_read", "info", "Jules session listesi okundu.", new { exitCode = sessions.ExitCode }));
+            var relevantSessionsOutput = FilterRelevantSessions(sessions.Output, settings);
 
-            var pullOutput = await TryPullTrackedSessionAsync(settings, sessions.Output, events, cancellationToken);
+            var pullOutput = await TryPullTrackedSessionAsync(settings, relevantSessionsOutput, events, cancellationToken);
             var databaseHealth = await databaseHealthService.TestAsync(databaseConnectionString, cancellationToken);
             events.Add(CreateEvent(
                 "database_health_checked",
@@ -37,16 +38,25 @@ public sealed class TavlaAgentService
                 databaseHealth.Message,
                 new { databaseHealth.IsConfigured, databaseHealth.IsSuccess, databaseHealth.TableCount }));
 
-            var projectContext = BuildProjectContext(settings, sessions.Output, pullOutput, databaseHealth);
+            var projectContext = BuildProjectContext(settings, relevantSessionsOutput, pullOutput, databaseHealth);
+            OpenRouterCompletionResult completion;
 
-            var completion = await openRouterClient.CompleteAsync(
-                settings,
-                apiKey,
-                BuildSystemPrompt(settings),
-                projectContext,
-                maxTokens: 1800,
-                cancellationToken);
-            events.Add(CreateEvent("openrouter_analysis_completed", "info", "OpenRouter ajan analizi tamamlandi.", new { completion.Model }));
+            try
+            {
+                completion = await openRouterClient.CompleteAsync(
+                    settings,
+                    apiKey,
+                    BuildSystemPrompt(settings),
+                    projectContext,
+                    maxTokens: 1800,
+                    cancellationToken);
+                events.Add(CreateEvent("openrouter_analysis_completed", "info", "OpenRouter ajan analizi tamamlandi.", new { completion.Model }));
+            }
+            catch (Exception exception)
+            {
+                completion = CreateLocalFallbackCompletion(settings, relevantSessionsOutput, databaseHealth, exception);
+                events.Add(CreateEvent("openrouter_degraded", "warning", "OpenRouter free modelleri gecici kullanilamadi; yerel rapor uretildi.", new { exception.GetType().Name }));
+            }
 
             var nextPrompt = ExtractString(completion.Content, "nextPrompt");
             var shouldStart = ExtractBool(completion.Content, "shouldStartNewJulesSession");
@@ -62,9 +72,9 @@ public sealed class TavlaAgentService
                 events.Add(CreateEvent("next_prompt_prepared", "info", "Ajan sonraki Jules promptunu hazirladi; otomatik session acilmadi.", new { shouldStart, settings.AllowAutoJulesSessions }));
             }
 
-            var reportPath = SaveReport(settings, completion, sessions.Output, pullOutput, databaseHealth, autoResult);
+            var reportPath = SaveReport(settings, completion, relevantSessionsOutput, pullOutput, databaseHealth, autoResult);
             var completedAt = DateTimeOffset.Now;
-            var sqlReport = BuildSqlReport(settings, runUuid, startedAt, completedAt, "completed", completion, sessions.Output, reportPath, "");
+            var sqlReport = BuildSqlReport(settings, runUuid, startedAt, completedAt, "completed", completion, relevantSessionsOutput, reportPath, "");
             var sqlMessage = await TryWriteSqlReportAsync(databaseConnectionString, settings, sqlReport, events, cancellationToken);
 
             return new AgentRunResult
@@ -74,7 +84,7 @@ public sealed class TavlaAgentService
                 NextPrompt = nextPrompt,
                 ShouldStartNewJulesSession = shouldStart,
                 ReportPath = reportPath,
-                JulesSessionsRaw = sessions.Output,
+                JulesSessionsRaw = relevantSessionsOutput,
                 PullOutput = pullOutput,
                 SqlReportMessage = sqlMessage,
                 AutoJulesSessionResult = autoResult
@@ -134,6 +144,8 @@ public sealed class TavlaAgentService
          adli proje orkestrator ajanisin. Birincil modelin openai/gpt-oss-120b:free kabul edilir.
         Gorevin Jules'in son durumunu, yerel proje hafizasini, GitHub hedefini ve ajanlarim SQL rapor durumunu okuyup bir sonraki en dogru adimi tasarlamaktir.
         Proje, kullanicinin daha once yaptigi Batak projesine benzer sekilde fazli, loglu, prodetayi hafizali ve Jules destekli ilerlemelidir.
+        Batak yalnizca surec disiplini ornegidir; cevapta Batak, FAZ 95 veya baska eski proje icerigi yazma.
+        Konu sadece TavlaJules, tavla oyunu, Jules sessionlari ve ajanlarim SQL raporlamasidir.
         Gizli anahtar, connection string veya .env icerigini asla tekrar etme.
         Cevabini sadece gecerli JSON olarak ver:
         {
@@ -145,6 +157,52 @@ public sealed class TavlaAgentService
           "riskNotes": ["risk"]
         }
         """;
+    }
+
+    private static string FilterRelevantSessions(string sessionsOutput, ProjectSettings settings)
+    {
+        var lines = sessionsOutput
+            .Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries)
+            .Where(line =>
+                line.Contains(settings.GitHubRepo, StringComparison.OrdinalIgnoreCase)
+                || (!string.IsNullOrWhiteSpace(settings.TrackedJulesSessionId)
+                    && line.Contains(settings.TrackedJulesSessionId, StringComparison.Ordinal)))
+            .ToList();
+
+        return lines.Count == 0
+            ? "Bu repo icin Jules session satiri bulunamadi."
+            : string.Join(Environment.NewLine, lines);
+    }
+
+    private static OpenRouterCompletionResult CreateLocalFallbackCompletion(
+        ProjectSettings settings,
+        string sessionsOutput,
+        DatabaseHealthResult databaseHealth,
+        Exception exception)
+    {
+        var content = JsonSerializer.Serialize(new
+        {
+            statusSummary = "OpenRouter free modelleri gecici olarak kullanilamadi; tavlajules yerel durum raporu yazdi.",
+            whatJulesDid = sessionsOutput.Contains("In Progress", StringComparison.OrdinalIgnoreCase)
+                ? "Izlenen TavlaJules Jules session'i hala devam ediyor."
+                : "TavlaJules Jules session durumu okundu; detay icin agent_jules_sessions ve agent_events tablolarina bak.",
+            nextPrompt = "Jules, TavlaJules reposunda mevcut durumu incele. Tavla kural motoru, mobil oyun akisi, ajanlarim SQL raporlari ve prodetayi/yapilanlar hafizasi disinda eski Batak fazlarina referans verme. Bir sonraki uygulanabilir tavla gelistirme adimini dosya bazli ve test odakli raporla.",
+            shouldStartNewJulesSession = false,
+            databasePlan = databaseHealth.IsSuccess
+                ? "ajanlarim raporlari yaziliyor; sonraki adim agent_runs/agent_events ekran veya sorgu gorunumlerini iyilestirmek."
+                : "ajanlarim DB baglantisini dogrula; SQL rapor yazimi olmadan otomatik Jules gorevi baslatma.",
+            riskNotes = new[]
+            {
+                "OpenRouter free provider 503 veya 429 verebilir; bu durumda tavlajules SQL'e degraded rapor yazar.",
+                "Fallback model listesinde gereksiz modeller tutulmamali."
+            }
+        });
+
+        return new OpenRouterCompletionResult
+        {
+            Model = "local-degraded",
+            Content = content
+        };
     }
 
     private static string BuildProjectContext(ProjectSettings settings, string sessionsOutput, string? pullOutput, DatabaseHealthResult databaseHealth)

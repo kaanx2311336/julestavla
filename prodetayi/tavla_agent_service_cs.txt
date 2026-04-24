@@ -1,11 +1,14 @@
 `TavlaAgentService.cs`, `tavlajules` adli dakikalik orkestrator ajanidir.
 
 - `jules remote list --session` ile Jules durumlarini okur.
+- Jules session listesini sadece `kaanx2311336/julestavla` veya izlenen session ID ile ilgili satirlara filtreler; eski Batak sessionlari modele verilmez.
 - Izlenen session tamamlanmis gorunurse `jules remote pull --session <id>` ile sonucu ceker ama patch'i uygulamaz.
 - Aiven `ajanlarim` DB saglik durumunu okur.
 - `prodetayi/` ve `yapilanlar/` hafizasini toplayip OpenRouter ajanina verir.
 - OpenRouter sistem promptu, Batak projesine benzer fazli/prodetayi/yapilanlar disiplinini koruyacak sekilde tasarlandi.
+- Prompt 2026-04-24 guncellemesiyle daraltildi: Batak yalnizca surec disiplini ornegi, cevap icerigi kesinlikle TavlaJules/tavla olacak.
 - Modelden JSON bekler: durum ozeti, Jules'in yaptiklari, sonraki prompt, otomatik session onayi, DB plani ve risk notlari.
+- OpenRouter free modelleri 503/429 verirse tur basarisiz sayilmaz; `local-degraded` rapor uretilir ve SQL'e yazilir.
 - Her turu `agent_reports/YYYY_MM_DD_HH_mm_ss_agent_report.json` dosyasina yazar.
 - Her turu `AgentSqlReporter` ile Aiven `ajanlarim` DB icindeki `agent_runs`, `agent_events` ve `agent_jules_sessions` tablolarina yazar.
 - `AllowAutoJulesSessions` true ise ve model de onay verirse yeni Jules session baslatabilir; varsayilan guvenli davranis yalnizca onermektir.

@@ -9,3 +9,4 @@
 - Model uyumlulugu icin ajan talimatlari ayri `system` mesaji yerine tek `user` mesajinda `TALIMATLAR` + `GOREV VERISI` formatinda gonderilir.
 - Ajan icin birincil model `AgentModel` alanidir; varsayilan `openai/gpt-oss-120b:free`.
 - Primary ajan modeli gecici hata verirse ayni fallback zinciri kullanilir.
+- Model cevabi ```json fenced block ile gelirse temizlenir; SQL ve UI tarafina sade JSON metni tasinir.

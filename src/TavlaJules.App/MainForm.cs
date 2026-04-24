@@ -19,6 +19,7 @@ public sealed class MainForm : Form
     private readonly TextBox repoTextBox = new();
     private readonly TextBox julesUrlTextBox = new();
     private readonly TextBox modelTextBox = new();
+    private readonly TextBox fallbackModelsTextBox = new();
     private readonly TextBox apiKeyTextBox = new();
     private readonly TextBox sessionIdTextBox = new();
     private readonly TextBox dbConnectionTextBox = new();
@@ -134,11 +135,12 @@ public sealed class MainForm : Form
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Dock = DockStyle.Top,
             ColumnCount = 1,
-            RowCount = 13,
+            RowCount = 14,
             BackColor = panel.BackColor
         };
 
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
@@ -157,14 +159,15 @@ public sealed class MainForm : Form
         layout.Controls.Add(CreateInputGroup("GitHub repo", repoTextBox), 0, 2);
         layout.Controls.Add(CreateInputGroup("Jules adresi", julesUrlTextBox), 0, 3);
         layout.Controls.Add(CreateInputGroup("OpenRouter model", modelTextBox), 0, 4);
-        layout.Controls.Add(CreateApiKeyGroup(), 0, 5);
-        layout.Controls.Add(CreateGoalGroup(), 0, 6);
-        layout.Controls.Add(CreateHintLabel("Anahtar .env icinde tutulur ve git'e eklenmez. Alan bos kalirsa mevcut anahtar korunur."), 0, 7);
-        layout.Controls.Add(CreateButton("Ayarlari kaydet", SaveSettings), 0, 8);
-        layout.Controls.Add(CreateButton("OpenRouter baglantisini test et", async (_, _) => await TestOpenRouterAsync()), 0, 9);
-        layout.Controls.Add(CreateButton("Jules CLI test et", async (_, _) => await TestJulesCliAsync()), 0, 10);
-        layout.Controls.Add(CreateButton("Proje klasorunu ac", OpenProjectFolder), 0, 11);
-        layout.Controls.Add(CreateButton("Faz planini yenile", (_, _) => RefreshPhaseList()), 0, 12);
+        layout.Controls.Add(CreateInputGroup("Fallback model(ler)", fallbackModelsTextBox), 0, 5);
+        layout.Controls.Add(CreateApiKeyGroup(), 0, 6);
+        layout.Controls.Add(CreateGoalGroup(), 0, 7);
+        layout.Controls.Add(CreateHintLabel("Anahtar .env icinde tutulur ve git'e eklenmez. Alan bos kalirsa mevcut anahtar korunur."), 0, 8);
+        layout.Controls.Add(CreateButton("Ayarlari kaydet", SaveSettings), 0, 9);
+        layout.Controls.Add(CreateButton("OpenRouter baglantisini test et", async (_, _) => await TestOpenRouterAsync()), 0, 10);
+        layout.Controls.Add(CreateButton("Jules CLI test et", async (_, _) => await TestJulesCliAsync()), 0, 11);
+        layout.Controls.Add(CreateButton("Proje klasorunu ac", OpenProjectFolder), 0, 12);
+        layout.Controls.Add(CreateButton("Faz planini yenile", (_, _) => RefreshPhaseList()), 0, 13);
 
         panel.Controls.Add(layout);
         return panel;
@@ -470,6 +473,7 @@ public sealed class MainForm : Form
         repoTextBox.Text = settings.GitHubRepo;
         julesUrlTextBox.Text = settings.JulesUrl;
         modelTextBox.Text = settings.OpenRouterModel;
+        fallbackModelsTextBox.Text = settings.OpenRouterFallbackModels;
         sessionIdTextBox.Text = settings.TrackedJulesSessionId;
         autoJulesCheckBox.Checked = settings.AllowAutoJulesSessions;
         goalTextBox.Text = settings.Goal;
@@ -483,6 +487,7 @@ public sealed class MainForm : Form
         settings.GitHubRepo = repoTextBox.Text.Trim();
         settings.JulesUrl = julesUrlTextBox.Text.Trim();
         settings.OpenRouterModel = modelTextBox.Text.Trim();
+        settings.OpenRouterFallbackModels = fallbackModelsTextBox.Text.Trim();
         settings.AgentModel = settings.OpenRouterModel;
         settings.TrackedJulesSessionId = sessionIdTextBox.Text.Trim();
         settings.AllowAutoJulesSessions = autoJulesCheckBox.Checked;

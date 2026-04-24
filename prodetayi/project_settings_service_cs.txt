@@ -4,3 +4,4 @@
 - Dosya yoksa guvenli varsayilanlarla baslar.
 - Bozuk JSON veya okuma hatasinda yeni varsayilan ayar nesnesi dondurur.
 - Hassas API anahtari bu serviste saklanmaz.
+- 2026-04-24 guncellemesiyle eski kayitlarda bulunan `qwen/qwen3-coder:free` fallback modeli yukleme sirasinda temizlenir.
