@@ -48,8 +48,8 @@ public sealed class MainForm : Form
     private void InitializeWindow()
     {
         Text = "TavlaJules";
-        MinimumSize = new Size(1200, 800);
-        Size = new Size(1380, 900);
+        MinimumSize = new Size(980, 640);
+        Size = new Size(1160, 740);
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(13, 18, 32);
         Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
@@ -62,12 +62,12 @@ public sealed class MainForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 3,
-            Padding = new Padding(18),
+            Padding = new Padding(12),
             BackColor = BackColor
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 88));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 74));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
 
         root.Controls.Add(BuildHeader(), 0, 0);
         root.Controls.Add(BuildBody(), 0, 1);
@@ -78,16 +78,16 @@ public sealed class MainForm : Form
     private Control BuildHeader()
     {
         var panel = CreatePanel(new Padding(0));
-        panel.Padding = new Padding(20, 14, 20, 12);
+        panel.Padding = new Padding(18, 10, 18, 10);
 
         var title = new Label
         {
             AutoSize = false,
             Dock = DockStyle.Left,
-            Width = 620,
+            Width = 520,
             Text = "TavlaJules Kontrol Paneli",
             ForeColor = Color.White,
-            Font = new Font(Font.FontFamily, 22F, FontStyle.Bold)
+            Font = new Font(Font.FontFamily, 20F, FontStyle.Bold)
         };
 
         var subtitle = new Label
@@ -112,10 +112,10 @@ public sealed class MainForm : Form
             ColumnCount = 2,
             RowCount = 1,
             BackColor = BackColor,
-            Padding = new Padding(0, 16, 0, 12)
+            Padding = new Padding(0, 12, 0, 8)
         };
-        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44));
-        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 56));
+        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
+        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
 
         body.Controls.Add(BuildSettingsPanel(), 0, 0);
         body.Controls.Add(BuildPlanPanel(), 1, 0);
@@ -125,29 +125,32 @@ public sealed class MainForm : Form
     private Control BuildSettingsPanel()
     {
         var panel = CreatePanel(new Padding(0, 0, 14, 0));
-        panel.Padding = new Padding(18);
+        panel.Padding = new Padding(14);
+        panel.AutoScroll = true;
 
         var layout = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Dock = DockStyle.Top,
             ColumnCount = 1,
             RowCount = 13,
             BackColor = panel.BackColor
         };
 
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
 
         layout.Controls.Add(CreateSectionTitle("Ayarlar"), 0, 0);
         layout.Controls.Add(CreateInputGroup("Proje klasoru", folderTextBox), 0, 1);
@@ -170,24 +173,7 @@ public sealed class MainForm : Form
     private Control BuildPlanPanel()
     {
         var panel = CreatePanel(new Padding(0));
-        panel.Padding = new Padding(18);
-
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 9,
-            BackColor = panel.BackColor
-        };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 26));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 112));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 22));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 52));
+        panel.Padding = new Padding(14);
 
         phaseListView.Dock = DockStyle.Fill;
         phaseListView.View = View.Details;
@@ -225,18 +211,63 @@ public sealed class MainForm : Form
         logTextBox.ForeColor = Color.FromArgb(184, 211, 255);
         logTextBox.Font = new Font("Consolas", 10F, FontStyle.Regular, GraphicsUnit.Point);
 
-        layout.Controls.Add(CreateSectionTitle("Yol Haritasi"), 0, 0);
-        layout.Controls.Add(phaseListView, 0, 1);
-        layout.Controls.Add(CreateSectionTitle("Ajan Ayarlari"), 0, 2);
-        layout.Controls.Add(BuildAgentPanel(), 0, 3);
-        layout.Controls.Add(CreateSectionTitle("Jules Gorev Promptu"), 0, 4);
-        layout.Controls.Add(julesPromptTextBox, 0, 5);
-        layout.Controls.Add(julesButtonRow, 0, 6);
-        layout.Controls.Add(CreateSectionTitle("Calisma Gunlugu"), 0, 7);
-        layout.Controls.Add(logTextBox, 0, 8);
+        var tabs = CreateTabs();
+        tabs.TabPages.Add(CreateTabPage("Yol Haritasi", phaseListView));
+        tabs.TabPages.Add(CreateTabPage("Ajan", BuildAgentPanel()));
+        tabs.TabPages.Add(CreateTabPage("Jules Prompt", BuildPromptTab(julesButtonRow)));
+        tabs.TabPages.Add(CreateTabPage("Gunluk", logTextBox));
 
-        panel.Controls.Add(layout);
+        panel.Controls.Add(tabs);
         return panel;
+    }
+
+    private TabControl CreateTabs()
+    {
+        var tabs = new TabControl
+        {
+            Dock = DockStyle.Fill,
+            DrawMode = TabDrawMode.OwnerDrawFixed,
+            ItemSize = new Size(120, 30),
+            SizeMode = TabSizeMode.Fixed
+        };
+        tabs.DrawItem += (_, e) =>
+        {
+            var page = tabs.TabPages[e.Index];
+            var selected = e.Index == tabs.SelectedIndex;
+            using var backBrush = new SolidBrush(selected ? Color.FromArgb(38, 93, 221) : Color.FromArgb(23, 31, 50));
+            using var textBrush = new SolidBrush(Color.White);
+            e.Graphics.FillRectangle(backBrush, e.Bounds);
+            TextRenderer.DrawText(e.Graphics, page.Text, Font, e.Bounds, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        };
+        return tabs;
+    }
+
+    private TabPage CreateTabPage(string title, Control content)
+    {
+        var page = new TabPage(title)
+        {
+            BackColor = Color.FromArgb(18, 25, 43),
+            Padding = new Padding(8)
+        };
+        content.Dock = DockStyle.Fill;
+        page.Controls.Add(content);
+        return page;
+    }
+
+    private Control BuildPromptTab(Control buttonRow)
+    {
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = Color.Transparent
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        layout.Controls.Add(julesPromptTextBox, 0, 0);
+        layout.Controls.Add(buttonRow, 0, 1);
+        return layout;
     }
 
     private Control BuildAgentPanel()

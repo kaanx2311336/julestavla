@@ -1,0 +1,20 @@
+2026-04-24 - TavlaJules kucuk ekran UI duzeni iyilestirildi.
+
+Yapilanlar:
+- Ana pencere minimum boyutu 980x640 olarak dusuruldu.
+- Varsayilan pencere boyutu 1160x740 yapildi.
+- Header ve ana padding degerleri sikistirildi.
+- Sol ayar paneli `AutoScroll` destekli hale getirildi.
+- Sag panel tek ekranda ust uste yigilmak yerine sekmeli hale getirildi:
+  - `Yol Haritasi`
+  - `Ajan`
+  - `Jules Prompt`
+  - `Gunluk`
+- `dotnet build .\TavlaJules.sln -c Release` 0 hata / 0 uyari ile basarili oldu.
+
+Baslatma icin gerekli alanlar:
+- `OpenRouter API key`: bos gorunebilir; `.env` icinde kayit varsa korunur.
+- `Aiven ajanlarim MySQL`: bos gorunebilir; `.env` icinde `AJANLARIM_MYSQL` kayit varsa korunur.
+- `tavlajules izlenen session`: izlenecek Jules session ID.
+- `Ajan baslat`: dakikalik izlemeyi baslatir.
+- `Ajan tek tur`: hemen tek kontrol/rapor turu calistirir.
