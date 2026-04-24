@@ -1,0 +1,8 @@
+# 2026-04-24 - Enhanced GameEngine with Turn & Dice Tracking
+
+- Updated `GameEngine` in `src/TavlaJules.Engine/Engine/GameEngine.cs` to manage dice rolling and active turn states.
+- Implemented `RemainingDice` property and `StartTurn` to convert double dice into four usable dice.
+- Refactored `ApplyMove` to infer distances, search matching remaining dice (with special logic for bearing off), consume the die upon success, and only advance the turn when all dice are used.
+- Implemented `GenerateLegalMoves` by cross-referencing available distinct dice and board point availabilities.
+- Expanded `GameEngineTests.cs` to test these exact scenarios including strict deterministic Random usage for testing.
+- Preserved existing backwards compatibility overload for `ApplyMove` to keep legacy test implementations untouched.

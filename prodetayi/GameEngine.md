@@ -2,6 +2,10 @@ Summarizes the `GameEngine` class located at `src/TavlaJules.Engine/Engine/GameE
 
 *   **Purpose:** The main class responsible for managing the state and rules of the backgammon game.
 *   **Key Components:**
-    *   Holds the `Board`, `MoveValidator` and `CurrentTurn`.
-    *   `ApplyMove(Move move, PlayerColor player, int diceRoll)` validates and executes a single move, updating board points, handling hits, and bearing off logic.
-    *   `SetTurn` to manually set the current turn.
+    *   Holds the `Board`, `MoveValidator`, and `CurrentTurn`.
+    *   Tracks the `RemainingDice` for the current turn to strictly enforce that moves are only made with valid dice, and properties like `IsTurnComplete`.
+    *   `RollDice(Random?)` allows generating 2 dice rolls deterministically.
+    *   `StartTurn(PlayerColor, int, int)` establishes the turn rules, converting double dice rolls to four distinct dice.
+    *   `AdvanceTurn()` switches current players after all dice are consumed.
+    *   `ApplyMove(Move)` executes single checker moves securely by inferring the dice roll, ensuring there is a corresponding remaining die, consuming the die, hitting, and bearing off.
+    *   `GenerateLegalMoves(PlayerColor)` finds all available correct single moves for the player depending on the unconsumed dice.
