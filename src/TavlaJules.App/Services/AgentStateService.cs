@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Security.Cryptography;
+using System.Text;
 using TavlaJules.App.Models;
 
 namespace TavlaJules.App.Services;
@@ -21,6 +23,42 @@ public sealed class AgentStateService
     {
         var state = Load(settings);
         return state.AppliedCompletedSessionIds.Contains(sessionId, StringComparer.Ordinal);
+    }
+
+    public IReadOnlyList<string> GetHandledCompletedSessionIds(ProjectSettings settings)
+    {
+        return Load(settings).HandledCompletedSessionIds;
+    }
+
+    public IReadOnlyList<string> GetAppliedCompletedSessionIds(ProjectSettings settings)
+    {
+        return Load(settings).AppliedCompletedSessionIds;
+    }
+
+    public string GetPendingAppliedSessionId(ProjectSettings settings)
+    {
+        return Load(settings).PendingAppliedSessionId;
+    }
+
+    public bool HasSentPrompt(ProjectSettings settings, string prompt)
+    {
+        var state = Load(settings);
+        return state.SentPromptHashes.Contains(HashPrompt(prompt), StringComparer.Ordinal);
+    }
+
+    public void MarkPromptSent(ProjectSettings settings, string prompt, string sessionId)
+    {
+        var state = Load(settings);
+        var hash = HashPrompt(prompt);
+
+        if (!state.SentPromptHashes.Contains(hash, StringComparer.Ordinal))
+        {
+            state.SentPromptHashes.Add(hash);
+        }
+
+        state.LastPromptSessionId = sessionId;
+        state.UpdatedAt = DateTimeOffset.Now;
+        Save(settings, state);
     }
 
     public void MarkCompletedSessionHandled(ProjectSettings settings, string sessionId, string newSessionId)
@@ -46,8 +84,21 @@ public sealed class AgentStateService
             state.AppliedCompletedSessionIds.Add(sessionId);
         }
 
+        state.PendingAppliedSessionId = sessionId;
         state.UpdatedAt = DateTimeOffset.Now;
         Save(settings, state);
+    }
+
+    public void ClearPendingAppliedSession(ProjectSettings settings, string sessionId)
+    {
+        var state = Load(settings);
+
+        if (state.PendingAppliedSessionId.Equals(sessionId, StringComparison.Ordinal))
+        {
+            state.PendingAppliedSessionId = "";
+            state.UpdatedAt = DateTimeOffset.Now;
+            Save(settings, state);
+        }
     }
 
     public static string ParseSessionId(CommandResult result)
@@ -88,11 +139,21 @@ public sealed class AgentStateService
         return Path.Combine(settings.ProjectFolder, "agent_state", $"{settings.AgentName}.json");
     }
 
+    private static string HashPrompt(string prompt)
+    {
+        var normalized = Regex.Replace(prompt.Trim().ToLowerInvariant(), @"\s+", " ");
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
+        return Convert.ToHexString(bytes);
+    }
+
     private sealed class AgentState
     {
         public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.Now;
         public string LastTrackedSessionId { get; set; } = "";
+        public string LastPromptSessionId { get; set; } = "";
+        public string PendingAppliedSessionId { get; set; } = "";
         public List<string> HandledCompletedSessionIds { get; set; } = [];
         public List<string> AppliedCompletedSessionIds { get; set; } = [];
+        public List<string> SentPromptHashes { get; set; } = [];
     }
 }

@@ -20,3 +20,6 @@
 - Apply basarili olursa `dotnet build` ve `dotnet test` calistirilir; dogrulama basariliyse staged secret taramasi yapilip commit/push denenir.
 - Apply, dogrulama, secret scan, commit veya push bloklanirsa yeni Jules session acilmaz; hata `agent_events`, JSON rapor ve dashboard'a yazilir.
 - OpenRouter baglamina son agent raporlari, otonom komut ozetleri ve anlik Jules/Git durumu eklenir; model sonraki promptu bu hafizayla tasarlar.
+- 2026-04-24 tekrar duzeltmesiyle `jules remote list` icindeki kisaltilmis repo adlari da yakalanir; ayni aciklamaya sahip completed session daha once islenen/applied session ile eslesirse tekrar apply edilmez.
+- OpenRouter kullanilamazsa `local-degraded` artik yeni Jules promptu uretmez; sadece SQL/dashboard raporu yazar. Boylece ayni prompt free model hatalarinda tekrar tekrar Jules'e gitmez.
+- Gonderilen nextPrompt SHA-256 parmak izi `AgentStateService` icinde tutulur; ayni prompt tekrar gelirse yeni session acilmaz.

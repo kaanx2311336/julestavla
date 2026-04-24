@@ -1,0 +1,16 @@
+2026-04-24 20:32
+
+TavlaJules ajaninda duplicate prompt ve dirty workspace sorunlari duzeltildi.
+
+- Jules'in ekledigi tavla engine patch'i once build hatasi verdi; sebep Engine projelerinin `net10.0` hedeflemesiydi. Projeler `net9.0` yapildi.
+- `dotnet build` ve `dotnet test` basarili calisti; tavla engine fazi commit/push edildi.
+- `jules remote list` repo adini kisalttigi icin ajan once yalnizca izlenen session'i goruyordu. Kisaltilmis repo prefix'i de filtreye eklendi.
+- Ayni aciklamaya sahip completed session daha once islenen/applied session ile eslesirse tekrar apply edilmiyor.
+- OpenRouter hata verirse `local-degraded` artik yeni prompt dondurmuyor; ayni prompt Jules'e tekrar gonderilmiyor.
+- Jules'e gonderilen promptlar hashlenip `agent_state` icinde tutuluyor; ayni prompt tekrar gelirse session acilmiyor.
+
+Test:
+- `dotnet build .\TavlaJules.sln -c Release` basarili.
+- `dotnet test .\TavlaJules.sln -c Release --no-build` basarili, 1 test gecti.
+- `--agent-once` calisti; session `18225620343511604147`, `14191603992399940638` ile duplicate goruldu ve tekrar apply edilmedi.
+- OpenRouter yeni ve farkli Move fazi promptu uretince yeni session `9132320705836949756` acildi.

@@ -59,7 +59,7 @@ public sealed class TavlaAgentService
             }
             catch (Exception exception)
             {
-                completion = CreateLocalFallbackCompletion(settings, relevantSessionsOutput, databaseHealth, exception);
+                completion = CreateLocalFallbackCompletion(settings, relevantSessionsOutput, databaseHealth, automation, exception);
                 events.Add(CreateEvent("openrouter_degraded", "warning", "OpenRouter free modelleri gecici kullanilamadi; yerel rapor uretildi.", new { exception.GetType().Name }));
             }
 
@@ -74,24 +74,40 @@ public sealed class TavlaAgentService
 
             if (((settings.AllowAutoJulesSessions && shouldStart) || shouldContinueCompletedSession) && !string.IsNullOrWhiteSpace(nextPrompt))
             {
-                autoResult = await julesCliService.CreateSessionAsync(settings, nextPrompt, cancellationToken);
-                newJulesSessionId = AgentStateService.ParseSessionId(autoResult);
-
-                if (autoResult.IsSuccess && shouldContinueCompletedSession)
+                if (agentStateService.HasSentPrompt(settings, nextPrompt))
                 {
-                    agentStateService.MarkCompletedSessionHandled(settings, trackedSessionIdAtStart, newJulesSessionId);
-
-                    if (!string.IsNullOrWhiteSpace(newJulesSessionId))
-                    {
-                        settings.TrackedJulesSessionId = newJulesSessionId;
-                    }
+                    events.Add(CreateEvent(
+                        "duplicate_next_prompt_skipped",
+                        "warning",
+                        "Ayni Jules promptu daha once gonderildigi icin yeni session acilmadi.",
+                        new { trackedSessionIdAtStart }));
                 }
+                else
+                {
+                    autoResult = await julesCliService.CreateSessionAsync(settings, nextPrompt, cancellationToken);
+                    newJulesSessionId = AgentStateService.ParseSessionId(autoResult);
 
-                events.Add(CreateEvent(
-                    "auto_jules_session_created",
-                    autoResult.IsSuccess ? "info" : "error",
-                    "Ajan otomatik Jules session denemesi yapti.",
-                    new { autoResult.ExitCode, continuedFromSessionId = trackedSessionIdAtStart, newJulesSessionId, shouldContinueCompletedSession }));
+                    if (autoResult.IsSuccess)
+                    {
+                        agentStateService.MarkPromptSent(settings, nextPrompt, newJulesSessionId);
+                    }
+
+                    if (autoResult.IsSuccess && shouldContinueCompletedSession)
+                    {
+                        agentStateService.MarkCompletedSessionHandled(settings, trackedSessionIdAtStart, newJulesSessionId);
+
+                        if (!string.IsNullOrWhiteSpace(newJulesSessionId))
+                        {
+                            settings.TrackedJulesSessionId = newJulesSessionId;
+                        }
+                    }
+
+                    events.Add(CreateEvent(
+                        "auto_jules_session_created",
+                        autoResult.IsSuccess ? "info" : "error",
+                        "Ajan otomatik Jules session denemesi yapti.",
+                        new { autoResult.ExitCode, continuedFromSessionId = trackedSessionIdAtStart, newJulesSessionId, shouldContinueCompletedSession }));
+                }
             }
             else if (automation.TrackedSessionCompleted && !shouldContinueCompletedSession)
             {
@@ -183,6 +199,16 @@ public sealed class TavlaAgentService
             return automation;
         }
 
+        if (TryFindDuplicateCompletedSession(settings, sessionsOutput, trackedSessionId, out var duplicateOfSessionId))
+        {
+            automation.AlreadyApplied = true;
+            automation.DuplicateCompletedSession = true;
+            automation.DuplicateOfSessionId = duplicateOfSessionId;
+            automation.Summary = $"Completed Jules session daha once islenen {duplicateOfSessionId} ile ayni gorunuyor; tekrar apply edilmeyecek.";
+            events.Add(CreateEvent("duplicate_completed_session_skipped", "warning", "Ayni prompttan gelen completed Jules session tekrar apply edilmeyecek.", new { trackedSessionId, duplicateOfSessionId }));
+            return automation;
+        }
+
         if (!settings.AutoApplyCompletedSessionPatch)
         {
             automation.JulesPullResult = await julesCliService.PullSessionAsync(settings, trackedSessionId, apply: false, cancellationToken);
@@ -205,10 +231,37 @@ public sealed class TavlaAgentService
 
         if (!WorkspaceAutomationService.IsCleanStatus(automation.GitStatusBeforeApply))
         {
+            var pendingAppliedSessionId = agentStateService.GetPendingAppliedSessionId(settings);
+            if (!string.IsNullOrWhiteSpace(pendingAppliedSessionId) && settings.AutoCommitAndPushAppliedChanges)
+            {
+                automation.ResumedDirtyWorkspace = true;
+                events.Add(CreateEvent("dirty_workspace_recovery_started", "warning", "Onceki apply sonrasi kirli kalan workspace dogrulanip commit/push edilecek.", new { pendingAppliedSessionId, trackedSessionId }));
+                var verified = await VerifyAppliedChangesAsync(settings, automation, events, cancellationToken);
+
+                if (verified)
+                {
+                    await CommitAndPushAppliedChangesAsync(settings, pendingAppliedSessionId, automation, events, cancellationToken);
+                }
+
+                if (!automation.AutomationBlocked)
+                {
+                    agentStateService.ClearPendingAppliedSession(settings, pendingAppliedSessionId);
+                    automation.Summary = $"Kirli workspace onceki apply icin toparlandi ve {pendingAppliedSessionId} commit/push sureci tamamlandi. Bu tur yeni apply baslatilmadi.";
+                }
+                else
+                {
+                    automation.Summary = "Kirli workspace toparlanamadi; build/test/commit/push detaylari agent_events icinde.";
+                }
+            }
+            else
+            {
+                automation.AutomationBlocked = true;
+                automation.JulesPullResult = await julesCliService.PullSessionAsync(settings, trackedSessionId, apply: false, cancellationToken);
+                automation.Summary = "Calisma alani temiz olmadigi icin completed Jules patch'i otomatik uygulanmadi.";
+                events.Add(CreateEvent("auto_apply_blocked_dirty_workspace", "warning", "Calisma alani temiz degil; otomatik apply durduruldu.", new { trackedSessionId, status = Trim(automation.GitStatusBeforeApply.Output + automation.GitStatusBeforeApply.Error, 1200) }));
+            }
+
             automation.AutomationBlocked = true;
-            automation.JulesPullResult = await julesCliService.PullSessionAsync(settings, trackedSessionId, apply: false, cancellationToken);
-            automation.Summary = "Calisma alani temiz olmadigi icin completed Jules patch'i otomatik uygulanmadi.";
-            events.Add(CreateEvent("auto_apply_blocked_dirty_workspace", "warning", "Calisma alani temiz degil; otomatik apply durduruldu.", new { trackedSessionId, status = Trim(automation.GitStatusBeforeApply.Output + automation.GitStatusBeforeApply.Error, 1200) }));
             return automation;
         }
 
@@ -225,34 +278,49 @@ public sealed class TavlaAgentService
 
         agentStateService.MarkCompletedSessionApplied(settings, trackedSessionId);
 
-        if (settings.AutoRunVerification)
+        if (settings.AutoRunVerification && !await VerifyAppliedChangesAsync(settings, automation, events, cancellationToken))
         {
-            automation.VerificationBuildResult = await workspaceAutomationService.BuildAsync(settings, cancellationToken);
-            events.Add(CreateEvent("verification_build_completed", automation.VerificationBuildResult.IsSuccess ? "info" : "error", "Otomatik dotnet build tamamlandi.", new { automation.VerificationBuildResult.ExitCode }));
-
-            if (automation.VerificationBuildResult.IsSuccess)
-            {
-                automation.VerificationTestResult = await workspaceAutomationService.TestAsync(settings, cancellationToken);
-                events.Add(CreateEvent("verification_test_completed", automation.VerificationTestResult.IsSuccess ? "info" : "error", "Otomatik dotnet test tamamlandi.", new { automation.VerificationTestResult.ExitCode }));
-            }
-
-            if (!automation.VerificationBuildResult.IsSuccess || automation.VerificationTestResult is { IsSuccess: false })
-            {
-                automation.AutomationBlocked = true;
-                automation.Summary = "Jules patch apply edildi ama dogrulama basarisiz; commit/push ve sonraki session durduruldu.";
-                automation.GitStatusAfterAutomation = await workspaceAutomationService.GetGitStatusAsync(settings, cancellationToken);
-                return automation;
-            }
+            automation.Summary = "Jules patch apply edildi ama dogrulama basarisiz; commit/push ve sonraki session durduruldu.";
+            automation.GitStatusAfterAutomation = await workspaceAutomationService.GetGitStatusAsync(settings, cancellationToken);
+            return automation;
         }
 
         if (settings.AutoCommitAndPushAppliedChanges)
         {
             await CommitAndPushAppliedChangesAsync(settings, trackedSessionId, automation, events, cancellationToken);
+            if (!automation.AutomationBlocked)
+            {
+                agentStateService.ClearPendingAppliedSession(settings, trackedSessionId);
+            }
         }
 
         automation.GitStatusAfterAutomation = await workspaceAutomationService.GetGitStatusAsync(settings, cancellationToken);
         automation.Summary = BuildAutomationSummary(automation);
         return automation;
+    }
+
+    private async Task<bool> VerifyAppliedChangesAsync(
+        ProjectSettings settings,
+        AgentAutomationArtifacts automation,
+        List<AgentEvent> events,
+        CancellationToken cancellationToken)
+    {
+        automation.VerificationBuildResult = await workspaceAutomationService.BuildAsync(settings, cancellationToken);
+        events.Add(CreateEvent("verification_build_completed", automation.VerificationBuildResult.IsSuccess ? "info" : "error", "Otomatik dotnet build tamamlandi.", new { automation.VerificationBuildResult.ExitCode }));
+
+        if (automation.VerificationBuildResult.IsSuccess)
+        {
+            automation.VerificationTestResult = await workspaceAutomationService.TestAsync(settings, cancellationToken);
+            events.Add(CreateEvent("verification_test_completed", automation.VerificationTestResult.IsSuccess ? "info" : "error", "Otomatik dotnet test tamamlandi.", new { automation.VerificationTestResult.ExitCode }));
+        }
+
+        if (!automation.VerificationBuildResult.IsSuccess || automation.VerificationTestResult is { IsSuccess: false })
+        {
+            automation.AutomationBlocked = true;
+            return false;
+        }
+
+        return true;
     }
 
     private async Task CommitAndPushAppliedChangesAsync(
@@ -296,8 +364,83 @@ public sealed class TavlaAgentService
         }
     }
 
+    private bool TryFindDuplicateCompletedSession(ProjectSettings settings, string sessionsOutput, string trackedSessionId, out string duplicateOfSessionId)
+    {
+        duplicateOfSessionId = "";
+        var trackedDescription = NormalizeSessionDescription(TryGetSessionDescription(sessionsOutput, trackedSessionId));
+        if (trackedDescription.Length < 28)
+        {
+            return false;
+        }
+
+        var knownSessionIds = agentStateService
+            .GetAppliedCompletedSessionIds(settings)
+            .Concat(agentStateService.GetHandledCompletedSessionIds(settings))
+            .Where(id => !id.Equals(trackedSessionId, StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal);
+
+        foreach (var sessionId in knownSessionIds)
+        {
+            var knownDescription = NormalizeSessionDescription(TryGetSessionDescription(sessionsOutput, sessionId));
+            if (knownDescription.Length < 28)
+            {
+                continue;
+            }
+
+            if (trackedDescription.StartsWith(knownDescription, StringComparison.Ordinal)
+                || knownDescription.StartsWith(trackedDescription, StringComparison.Ordinal)
+                || CommonPrefixLength(trackedDescription, knownDescription) >= 40)
+            {
+                duplicateOfSessionId = sessionId;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string TryGetSessionDescription(string sessionsOutput, string sessionId)
+    {
+        var line = sessionsOutput
+            .Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(item => item.Contains(sessionId, StringComparison.Ordinal));
+
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return "";
+        }
+
+        var match = Regex.Match(line, @"^\s*\d{10,}\s+(?<description>.*?)\s+[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", RegexOptions.IgnoreCase);
+        return match.Success ? match.Groups["description"].Value : line;
+    }
+
+    private static string NormalizeSessionDescription(string value)
+    {
+        value = value.Replace("…", "", StringComparison.Ordinal).Trim().ToLowerInvariant();
+        return Regex.Replace(value, @"\s+", " ");
+    }
+
+    private static int CommonPrefixLength(string left, string right)
+    {
+        var count = Math.Min(left.Length, right.Length);
+        for (var i = 0; i < count; i++)
+        {
+            if (left[i] != right[i])
+            {
+                return i;
+            }
+        }
+
+        return count;
+    }
+
     private static string? SelectPullOutput(AgentAutomationArtifacts automation)
     {
+        if (automation.DuplicateCompletedSession)
+        {
+            return automation.Summary;
+        }
+
         var result = automation.JulesApplyResult ?? automation.JulesPullResult;
         if (result is null)
         {
@@ -346,10 +489,15 @@ public sealed class TavlaAgentService
 
     private static string FilterRelevantSessions(string sessionsOutput, ProjectSettings settings)
     {
+        var repoPrefix = settings.GitHubRepo.Length > 18
+            ? settings.GitHubRepo[..18]
+            : settings.GitHubRepo;
+
         var lines = sessionsOutput
             .Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries)
             .Where(line =>
                 line.Contains(settings.GitHubRepo, StringComparison.OrdinalIgnoreCase)
+                || line.Contains(repoPrefix, StringComparison.OrdinalIgnoreCase)
                 || (!string.IsNullOrWhiteSpace(settings.TrackedJulesSessionId)
                     && line.Contains(settings.TrackedJulesSessionId, StringComparison.Ordinal)))
             .ToList();
@@ -363,23 +511,27 @@ public sealed class TavlaAgentService
         ProjectSettings settings,
         string sessionsOutput,
         DatabaseHealthResult databaseHealth,
+        AgentAutomationArtifacts automation,
         Exception exception)
     {
         var content = JsonSerializer.Serialize(new
         {
-            statusSummary = "OpenRouter free modelleri gecici olarak kullanilamadi; tavlajules yerel durum raporu yazdi.",
+            statusSummary = "OpenRouter free modelleri gecici olarak kullanilamadi; tavlajules yerel durum raporu yazdi ve yeni Jules promptu gondermedi.",
             whatJulesDid = sessionsOutput.Contains("In Progress", StringComparison.OrdinalIgnoreCase)
                 ? "Izlenen TavlaJules Jules session'i hala devam ediyor."
-                : "TavlaJules Jules session durumu okundu; detay icin agent_jules_sessions ve agent_events tablolarina bak.",
-            nextPrompt = "Jules, TavlaJules reposunda mevcut durumu incele. Tavla kural motoru, mobil oyun akisi, ajanlarim SQL raporlari ve prodetayi/yapilanlar hafizasi disinda eski Batak fazlarina referans verme. Bir sonraki uygulanabilir tavla gelistirme adimini dosya bazli ve test odakli raporla.",
+                : string.IsNullOrWhiteSpace(automation.Summary)
+                    ? "TavlaJules Jules session durumu okundu; detay icin agent_jules_sessions ve agent_events tablolarina bak."
+                    : automation.Summary,
+            nextPrompt = "",
             shouldStartNewJulesSession = false,
             databasePlan = databaseHealth.IsSuccess
                 ? "ajanlarim raporlari yaziliyor; sonraki adim agent_runs/agent_events ekran veya sorgu gorunumlerini iyilestirmek."
                 : "ajanlarim DB baglantisini dogrula; SQL rapor yazimi olmadan otomatik Jules gorevi baslatma.",
             riskNotes = new[]
             {
-                "OpenRouter free provider 503 veya 429 verebilir; bu durumda tavlajules SQL'e degraded rapor yazar.",
-                "Fallback model listesinde gereksiz modeller tutulmamali."
+                "OpenRouter free provider 503 veya 429 verebilir; bu durumda tavlajules sadece SQL'e degraded rapor yazar.",
+                "OpenRouter cevap vermeden ayni prompt tekrar Jules'e gonderilmez.",
+                exception.Message
             }
         });
 
@@ -578,6 +730,8 @@ public sealed class TavlaAgentService
             $"trackedCompleted={automation.TrackedSessionCompleted}",
             $"appliedThisTurn={automation.AppliedThisTurn}",
             $"alreadyApplied={automation.AlreadyApplied}",
+            $"duplicateCompletedSession={automation.DuplicateCompletedSession}",
+            $"resumedDirtyWorkspace={automation.ResumedDirtyWorkspace}",
             $"blocked={automation.AutomationBlocked}"
         };
 
