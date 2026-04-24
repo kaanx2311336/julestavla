@@ -1,0 +1,9 @@
+`ajanizleme/` klasoru, `tavlajules` ajaninin yaptiklarini tarayicida gosteren statik dashboard'dur.
+
+- `index.html`: dashboard iskeleti.
+- `style.css`: koyu temali, responsive izleme arayuzu.
+- `app.js`: `dashboard-data.js` veya `dashboard.json` verisini okuyup run/event detaylarini render eder.
+- `data/.gitkeep`: data klasorunu repoda tutar.
+- Runtime verileri `data/dashboard.json` ve `data/dashboard-data.js` dosyalaridir; `.gitignore` ile repoya alinmaz.
+- HTML dogrudan cift tikla acilabilir; `dashboard-data.js` varsa veri otomatik yuklenir.
+- Alternatif olarak `JSON Sec` dugmesiyle bir dashboard JSON dosyasi manuel yuklenebilir.

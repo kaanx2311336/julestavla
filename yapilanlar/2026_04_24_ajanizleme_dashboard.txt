@@ -1,0 +1,11 @@
+2026-04-24 - `ajanizleme` HTML ajan izleme dashboard'u eklendi.
+
+Yapilanlar:
+- `ajanizleme/index.html`, `style.css`, `app.js` olusturuldu.
+- Dashboard son run durumunu, run listesini, model bilgisini, SQL rapor mesajini, durum ozetini, Jules'in yaptiklarini, sonraki promptu, DB planini ve eventleri gosterir.
+- `AgentDashboardExporter` eklendi.
+- Her ajan turundan sonra `ajanizleme/data/dashboard.json` ve `ajanizleme/data/dashboard-data.js` uretilir.
+- `dashboard-data.js` sayesinde HTML dosyasi tarayicida direkt acildiginda veri okuyabilir.
+- Runtime dashboard data dosyalari `.gitignore` ile repoya alinmaz.
+- Release build 0 hata / 0 uyari ile gecti.
+- Release DLL uzerinden `--agent-once` calistirildi; SQL'e `agent_runs.id=17` yazildi ve dashboard data dosyalari uretildi.

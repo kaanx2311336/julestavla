@@ -10,6 +10,7 @@ public sealed class TavlaAgentService
     private readonly OpenRouterClient openRouterClient = new();
     private readonly DatabaseHealthService databaseHealthService = new();
     private readonly AgentSqlReporter agentSqlReporter = new();
+    private readonly AgentDashboardExporter dashboardExporter = new();
 
     public async Task<AgentRunResult> RunOnceAsync(
         ProjectSettings settings,
@@ -76,6 +77,7 @@ public sealed class TavlaAgentService
             var completedAt = DateTimeOffset.Now;
             var sqlReport = BuildSqlReport(settings, runUuid, startedAt, completedAt, "completed", completion, relevantSessionsOutput, reportPath, "");
             var sqlMessage = await TryWriteSqlReportAsync(databaseConnectionString, settings, sqlReport, events, cancellationToken);
+            dashboardExporter.Export(settings, completion, reportPath, sqlMessage, relevantSessionsOutput, pullOutput, events);
 
             return new AgentRunResult
             {
@@ -109,7 +111,8 @@ public sealed class TavlaAgentService
             };
             var failurePath = SaveReport(settings, failureCompletion, "", null, new DatabaseHealthResult { Message = "Ajan turu hata ile bitti." }, null);
             var sqlReport = BuildSqlReport(settings, runUuid, startedAt, completedAt, "failed", failureCompletion, "", failurePath, exception.Message);
-            await TryWriteSqlReportAsync(databaseConnectionString, settings, sqlReport, events, cancellationToken);
+            var sqlMessage = await TryWriteSqlReportAsync(databaseConnectionString, settings, sqlReport, events, cancellationToken);
+            dashboardExporter.Export(settings, failureCompletion, failurePath, sqlMessage, "", null, events);
             throw;
         }
     }

@@ -1,0 +1,7 @@
+`AgentDashboardExporter.cs`, ajan izleme HTML panelinin veri export servisidir.
+
+- Her ajan turundan sonra `ajanizleme/data/dashboard.json` dosyasini gunceller.
+- `file://` ile acilan HTML'de CORS sorunu olmamasi icin ayni veriyi `ajanizleme/data/dashboard-data.js` olarak da yazar.
+- Son 50 run kaydini tutar.
+- Run ozetinde model, status, statusSummary, whatJulesDid, nextPrompt, databasePlan, riskNotes, SQL rapor mesaji ve event listesi bulunur.
+- Secret veya connection string yazmaz.

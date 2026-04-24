@@ -6,3 +6,5 @@ obj/
 publish/
 agent_reports/
 agent_state/
+ajanizleme/data/dashboard.json
+ajanizleme/data/dashboard-data.js

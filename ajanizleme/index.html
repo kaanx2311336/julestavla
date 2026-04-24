@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TavlaJules Ajan Izleme</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">ajan izleme</p>
+        <h1>tavlajules</h1>
+      </div>
+      <div class="actions">
+        <button id="reload-button" type="button">Yenile</button>
+        <label class="file-button">
+          JSON Sec
+          <input id="file-input" type="file" accept="application/json,.json">
+        </label>
+      </div>
+    </header>
+
+    <section class="status-grid">
+      <article class="metric">
+        <span>Son durum</span>
+        <strong id="latest-status">-</strong>
+      </article>
+      <article class="metric">
+        <span>Run sayisi</span>
+        <strong id="run-count">0</strong>
+      </article>
+      <article class="metric">
+        <span>Son model</span>
+        <strong id="latest-model">-</strong>
+      </article>
+      <article class="metric">
+        <span>SQL</span>
+        <strong id="sql-status">-</strong>
+      </article>
+    </section>
+
+    <section class="layout">
+      <aside class="run-list">
+        <div class="section-title">
+          <h2>Runlar</h2>
+          <span id="updated-at">-</span>
+        </div>
+        <div id="runs"></div>
+      </aside>
+
+      <section class="detail">
+        <div class="section-title">
+          <h2>Detay</h2>
+          <span id="selected-run">run secilmedi</span>
+        </div>
+
+        <div class="detail-grid">
+          <article>
+            <h3>Durum Ozeti</h3>
+            <p id="status-summary">Run sec.</p>
+          </article>
+          <article>
+            <h3>Jules Ne Yapti</h3>
+            <p id="what-jules-did">Run sec.</p>
+          </article>
+        </div>
+
+        <article class="wide">
+          <h3>Sonraki Jules Promptu</h3>
+          <pre id="next-prompt">Run sec.</pre>
+        </article>
+
+        <article class="wide">
+          <h3>DB Plani</h3>
+          <p id="database-plan">Run sec.</p>
+        </article>
+
+        <article class="wide">
+          <h3>Eventler</h3>
+          <div id="events" class="events"></div>
+        </article>
+      </section>
+    </section>
+  </main>
+
+  <script src="data/dashboard-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
