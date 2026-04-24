@@ -15,6 +15,7 @@ public sealed class ProjectSettings
     public string TrackedJulesSessionId { get; set; } = "14009672719483814558";
     public bool AllowAutoJulesSessions { get; set; }
     public bool AutoContinueCompletedSessions { get; set; } = true;
+    public bool AutoReplyAwaitingInputSessions { get; set; } = true;
     public bool AutoRecoverAwaitingInputSessions { get; set; } = true;
     public bool AutoApplyCompletedSessionPatch { get; set; } = true;
     public bool AutoCommitAndPushAppliedChanges { get; set; } = true;

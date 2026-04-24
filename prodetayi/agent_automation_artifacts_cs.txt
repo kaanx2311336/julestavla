@@ -6,6 +6,9 @@
 - `AwaitingInputRecoveryStarted`, bu bekleyen soru icin netlestirilmis yeni Jules session acildigini gosterir.
 - `AwaitingInputRecoverySession`, netlestirme icin acilan yeni session'in da input bekledigini isaretler; bu durumda yeni kopya acilmaz.
 - `AwaitingInputRecoveryPrompt`, CLI reply destegi olmadiginda acilacak netlestirilmis kurtarma promptunu tutar.
+- `AwaitingInputReplySent`, mevcut Jules session'a gercek feedback cevabi gonderildigini gosterir.
+- `AwaitingPlanApprovalSent`, Jules plan onayi bekliyorsa ayni session'a onay cevabi gonderildigini gosterir.
+- `AwaitingInputSessionIds`, `AwaitingPlanSessionIds`, `AwaitingInputReplyResults` ve `AwaitingPlanApprovalResults`, cevaplanan sessionlari ve sonuc komutlarini JSON/SQL/dashboard icin saklar.
 - `JulesPullResult` ve `JulesApplyResult`, Jules CLI pull/apply ciktilarini saklar.
 - `VerificationBuildResult` ve `VerificationTestResult`, apply sonrasi `dotnet build` ve `dotnet test` sonucunu saklar.
 - `GitStageResult`, `SecretScanResult`, `GitCommitResult` ve `GitPushResult`, dogrulanmis degisikligin GitHub'a guvenli gonderim surecini raporlar.

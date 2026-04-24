@@ -1,0 +1,8 @@
+TavlaJules ajanina mevcut Jules session cevaplama akisi eklendi.
+
+- Jules binary/API incelemesinde `tasks/{id}:interact` feedback endpointi bulundu.
+- `JulesCliService.ReplyToSessionAsync`, Windows Credential Manager icindeki Jules CLI tokeniyle mevcut session'a cevap gonderebiliyor.
+- Ajan artik `Awaiting User Feedback` durumunda net GameEngine metot listesini ayni session'a yolluyor.
+- Ajan `Awaiting Plan Approval` durumunda plan onayi gonderiyor.
+- Tekrar korumasi icin `RepliedAwaitingInputSessionIds` ve `ApprovedAwaitingPlanSessionIds` state alanlari eklendi.
+- Manuel testte `17102730546763399674` ve `3693799306426072744` sessionlarina feedback gonderildi; ikisi de `In Progress` durumuna gecti.

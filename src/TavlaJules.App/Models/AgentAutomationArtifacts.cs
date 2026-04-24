@@ -11,10 +11,18 @@ public sealed class AgentAutomationArtifacts
     public bool AwaitingInputAlreadyHandled { get; set; }
     public bool AwaitingInputRecoveryStarted { get; set; }
     public bool AwaitingInputRecoverySession { get; set; }
+    public bool AwaitingInputReplySent { get; set; }
+    public bool AwaitingPlanApprovalSent { get; set; }
     public bool AutomationBlocked { get; set; }
     public string Summary { get; set; } = "";
     public string DuplicateOfSessionId { get; set; } = "";
     public string AwaitingInputRecoveryPrompt { get; set; } = "";
+    public string AwaitingInputReplyPrompt { get; set; } = "";
+    public string AwaitingPlanApprovalPrompt { get; set; } = "";
+    public List<string> AwaitingInputSessionIds { get; set; } = [];
+    public List<string> AwaitingPlanSessionIds { get; set; } = [];
+    public List<CommandResult> AwaitingInputReplyResults { get; set; } = [];
+    public List<CommandResult> AwaitingPlanApprovalResults { get; set; } = [];
     public CommandResult? GitStatusBeforeApply { get; set; }
     public CommandResult? JulesPullResult { get; set; }
     public CommandResult? JulesApplyResult { get; set; }

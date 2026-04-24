@@ -47,6 +47,18 @@ public sealed class AgentStateService
         return state.AwaitingInputRecoverySessionIds.Contains(sessionId, StringComparer.Ordinal);
     }
 
+    public bool HasRepliedAwaitingInputSession(ProjectSettings settings, string sessionId)
+    {
+        var state = Load(settings);
+        return state.RepliedAwaitingInputSessionIds.Contains(sessionId, StringComparer.Ordinal);
+    }
+
+    public bool HasApprovedAwaitingPlanSession(ProjectSettings settings, string sessionId)
+    {
+        var state = Load(settings);
+        return state.ApprovedAwaitingPlanSessionIds.Contains(sessionId, StringComparer.Ordinal);
+    }
+
     public string GetPendingAppliedSessionId(ProjectSettings settings)
     {
         return Load(settings).PendingAppliedSessionId;
@@ -108,6 +120,42 @@ public sealed class AgentStateService
         if (!state.AwaitingInputRecoverySessionIds.Contains(sessionId, StringComparer.Ordinal))
         {
             state.AwaitingInputRecoverySessionIds.Add(sessionId);
+        }
+
+        state.UpdatedAt = DateTimeOffset.Now;
+        Save(settings, state);
+    }
+
+    public void MarkAwaitingInputSessionReplied(ProjectSettings settings, string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        var state = Load(settings);
+
+        if (!state.RepliedAwaitingInputSessionIds.Contains(sessionId, StringComparer.Ordinal))
+        {
+            state.RepliedAwaitingInputSessionIds.Add(sessionId);
+        }
+
+        state.UpdatedAt = DateTimeOffset.Now;
+        Save(settings, state);
+    }
+
+    public void MarkAwaitingPlanSessionApproved(ProjectSettings settings, string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        var state = Load(settings);
+
+        if (!state.ApprovedAwaitingPlanSessionIds.Contains(sessionId, StringComparer.Ordinal))
+        {
+            state.ApprovedAwaitingPlanSessionIds.Add(sessionId);
         }
 
         state.UpdatedAt = DateTimeOffset.Now;
@@ -209,6 +257,8 @@ public sealed class AgentStateService
         public List<string> AppliedCompletedSessionIds { get; set; } = [];
         public List<string> HandledAwaitingInputSessionIds { get; set; } = [];
         public List<string> AwaitingInputRecoverySessionIds { get; set; } = [];
+        public List<string> RepliedAwaitingInputSessionIds { get; set; } = [];
+        public List<string> ApprovedAwaitingPlanSessionIds { get; set; } = [];
         public List<string> SentPromptHashes { get; set; } = [];
     }
 }

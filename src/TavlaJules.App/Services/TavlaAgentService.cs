@@ -34,6 +34,7 @@ public sealed class TavlaAgentService
             var trackedSessionIdAtStart = settings.TrackedJulesSessionId;
             var relevantSessionsOutput = FilterRelevantSessions(sessions.Output, settings);
             var automation = await ProcessTrackedCompletedSessionAsync(settings, trackedSessionIdAtStart, relevantSessionsOutput, events, cancellationToken);
+            await ReplyToAwaitingInputSessionsAsync(settings, relevantSessionsOutput, automation, events, cancellationToken);
             var pullOutput = SelectPullOutput(automation);
 
             var databaseHealth = await databaseHealthService.TestAsync(databaseConnectionString, cancellationToken);
@@ -72,6 +73,7 @@ public sealed class TavlaAgentService
             var shouldRecoverAwaitingInputSession = settings.AutoRecoverAwaitingInputSessions
                 && automation.TrackedSessionAwaitingInput
                 && !automation.AwaitingInputAlreadyHandled
+                && !automation.AwaitingInputReplySent
                 && !automation.AutomationBlocked
                 && !string.IsNullOrWhiteSpace(automation.AwaitingInputRecoveryPrompt);
             var promptToSend = shouldRecoverAwaitingInputSession ? automation.AwaitingInputRecoveryPrompt : nextPrompt;
@@ -369,6 +371,100 @@ public sealed class TavlaAgentService
         return automation;
     }
 
+    private async Task ReplyToAwaitingInputSessionsAsync(
+        ProjectSettings settings,
+        string sessionsOutput,
+        AgentAutomationArtifacts automation,
+        List<AgentEvent> events,
+        CancellationToken cancellationToken)
+    {
+        automation.AwaitingInputSessionIds = FindAwaitingInputSessionIds(sessionsOutput).ToList();
+        automation.AwaitingPlanSessionIds = FindAwaitingPlanSessionIds(sessionsOutput).ToList();
+        if (automation.AwaitingInputSessionIds.Count == 0 && automation.AwaitingPlanSessionIds.Count == 0)
+        {
+            return;
+        }
+
+        automation.AwaitingInputReplyPrompt = BuildAwaitingInputReplyPrompt(settings);
+        automation.AwaitingPlanApprovalPrompt = BuildAwaitingPlanApprovalPrompt();
+
+        if (!settings.AutoReplyAwaitingInputSessions)
+        {
+            events.Add(CreateEvent(
+                "jules_awaiting_input_reply_skipped",
+                "warning",
+                "Awaiting User Feedback session bulundu ama otomatik cevap kapali.",
+                new { automation.AwaitingInputSessionIds }));
+            return;
+        }
+
+        foreach (var sessionId in automation.AwaitingPlanSessionIds.Take(3))
+        {
+            if (agentStateService.HasApprovedAwaitingPlanSession(settings, sessionId))
+            {
+                events.Add(CreateEvent(
+                    "jules_awaiting_plan_approval_already_sent",
+                    "info",
+                    "Bu Awaiting Plan Approval session icin daha once onay gonderildi.",
+                    new { sessionId }));
+                continue;
+            }
+
+            var result = await julesCliService.ReplyToSessionAsync(settings, sessionId, automation.AwaitingPlanApprovalPrompt, cancellationToken);
+            automation.AwaitingPlanApprovalResults.Add(result);
+
+            if (result.IsSuccess)
+            {
+                automation.AwaitingPlanApprovalSent = true;
+                agentStateService.MarkAwaitingPlanSessionApproved(settings, sessionId);
+            }
+
+            events.Add(CreateEvent(
+                "jules_awaiting_plan_approval_sent",
+                result.IsSuccess ? "info" : "error",
+                result.IsSuccess ? "Jules Awaiting Plan Approval session'ina onay gonderildi." : "Jules Awaiting Plan Approval session'ina onay gonderilemedi.",
+                new { sessionId, result.ExitCode, output = Trim(result.Output, 700), error = Trim(result.Error, 900) }));
+        }
+
+        foreach (var sessionId in automation.AwaitingInputSessionIds.Take(3))
+        {
+            if (agentStateService.HasRepliedAwaitingInputSession(settings, sessionId))
+            {
+                events.Add(CreateEvent(
+                    "jules_awaiting_input_reply_already_sent",
+                    "info",
+                    "Bu Awaiting User Feedback session icin daha once cevap gonderildi.",
+                    new { sessionId }));
+                continue;
+            }
+
+            var result = await julesCliService.ReplyToSessionAsync(settings, sessionId, automation.AwaitingInputReplyPrompt, cancellationToken);
+            automation.AwaitingInputReplyResults.Add(result);
+
+            if (result.IsSuccess)
+            {
+                automation.AwaitingInputReplySent = true;
+                agentStateService.MarkAwaitingInputSessionReplied(settings, sessionId);
+            }
+
+            events.Add(CreateEvent(
+                "jules_awaiting_input_reply_sent",
+                result.IsSuccess ? "info" : "error",
+                result.IsSuccess ? "Jules Awaiting User Feedback session'ina cevap gonderildi." : "Jules Awaiting User Feedback session'ina cevap gonderilemedi.",
+                new { sessionId, result.ExitCode, output = Trim(result.Output, 700), error = Trim(result.Error, 900) }));
+        }
+
+        if (automation.AwaitingInputReplySent)
+        {
+            automation.Summary = "Awaiting User Feedback durumundaki Jules session'a net GameEngine metot cevabi gonderildi; ajan tamamlanmasini bekleyecek.";
+        }
+
+        if (automation.AwaitingPlanApprovalSent)
+        {
+            automation.Summary = "Awaiting Plan Approval durumundaki Jules session'a plan onayi gonderildi; ajan uygulamaya gecmeli.";
+        }
+    }
+
     private async Task<bool> VerifyAppliedChangesAsync(
         ProjectSettings settings,
         AgentAutomationArtifacts automation,
@@ -539,7 +635,7 @@ public sealed class TavlaAgentService
 
         return Regex.IsMatch(
             sessionsOutput,
-            Regex.Escape(trackedSessionId) + @".*(Awaiting\s+User|Awaiting\s+.*Feedback|User\s+Feedback|Needs\s+input|Waiting\s+for\s+.*input)",
+            Regex.Escape(trackedSessionId) + @".*(Awaiting\s+User|Awaiting\s+.*Feedback|User\s+Feedback|Needs\s+input|Waiting\s+for\s+.*input|Awaiting\s+Plan|Plan\s+Approval|Awaiting\s+.*Approval)",
             RegexOptions.IgnoreCase);
     }
 
@@ -548,6 +644,82 @@ public sealed class TavlaAgentService
         var description = NormalizeSessionDescription(TryGetSessionDescription(sessionsOutput, trackedSessionId));
         return description.Contains("previous session", StringComparison.Ordinal)
             && description.Contains("waiting for", StringComparison.Ordinal);
+    }
+
+    private static IEnumerable<string> FindAwaitingInputSessionIds(string sessionsOutput)
+    {
+        return sessionsOutput
+            .Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => Regex.Match(line, @"^\s*(?<id>\d{10,}).*(Awaiting\s+User|Awaiting\s+.*Feedback|User\s+Feedback|Needs\s+input|Waiting\s+for\s+.*input)", RegexOptions.IgnoreCase))
+            .Where(match => match.Success)
+            .Select(match => match.Groups["id"].Value)
+            .Distinct(StringComparer.Ordinal);
+    }
+
+    private static IEnumerable<string> FindAwaitingPlanSessionIds(string sessionsOutput)
+    {
+        return sessionsOutput
+            .Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => Regex.Match(line, @"^\s*(?<id>\d{10,}).*(Awaiting\s+Plan|Plan\s+Approval|Awaiting\s+.*Approval)", RegexOptions.IgnoreCase))
+            .Where(match => match.Success)
+            .Select(match => match.Groups["id"].Value)
+            .Distinct(StringComparer.Ordinal);
+    }
+
+    private static string BuildAwaitingInputReplyPrompt(ProjectSettings settings)
+    {
+        return $"""
+        Here are the exact GameEngine requirements. Please continue this same Jules session and implement them now; do not ask another clarification question.
+
+        Repo: {settings.GitHubRepo}
+
+        Target files:
+        - `src/TavlaJules.Engine/Engine/GameEngine.cs`
+        - `src/TavlaJules.Engine.Tests/Engine/GameEngineTests.cs`
+        - `prodetayi/GameEngine.md`
+        - one new dated note under `yapilanlar/`
+
+        Add these GameEngine capabilities:
+        1. `RollDice(Random? random = null): (int die1, int die2)`
+           Return two dice values between 1 and 6. Use the supplied random when present for deterministic tests.
+
+        2. `StartTurn(PlayerColor player, int die1, int die2): void`
+           Validate dice values are 1..6, set `CurrentTurn`, store the current dice, and create remaining move dice. Doubles must create four remaining dice.
+
+        3. `IReadOnlyList<int> RemainingDice`
+           Expose the remaining dice for the active turn without letting callers mutate internal state.
+
+        4. `bool IsTurnComplete`
+           True when the active turn has no remaining dice.
+
+        5. `bool ApplyMove(Move move)`
+           Use `CurrentTurn` and `RemainingDice`; infer the move distance using the existing direction rules, validate with `MoveValidator`, apply the existing hit/bar/bearing-off behavior, consume one matching die, and switch turn only when the turn is complete.
+
+        6. Keep the existing `ApplyMove(Move move, PlayerColor player)` overload if needed for compatibility, but route it through the new turn/dice flow or keep behavior compatible with existing tests.
+
+        7. `void AdvanceTurn()`
+           Clear remaining dice and switch `CurrentTurn` to the other player. This should be safe to call at turn completion.
+
+        8. `IEnumerable<Move> GenerateLegalMoves(PlayerColor player)`
+           Generate simple legal single-checker moves for each remaining die by scanning board points and using `MoveValidator`. Keep it conservative; do not rewrite `MoveValidator`.
+
+        Constraints:
+        - Read relevant `prodetayi/` summaries before editing.
+        - Do not rewrite `Board`, `Move`, `PlayerColor`, or `MoveValidator`.
+        - Keep the patch focused around 100-500 lines.
+        - Add tests for dice rolling with deterministic random, doubles producing four remaining dice, invalid dice values, consuming dice after valid moves, rejecting moves that do not match remaining dice, and switching turn only after dice are consumed.
+        - Run or keep compatible with `dotnet build` and `dotnet test`.
+        - Do not commit or print secrets, `.env`, API keys, or database passwords.
+        """;
+    }
+
+    private static string BuildAwaitingPlanApprovalPrompt()
+    {
+        return """
+        Plan approved. Please proceed with the implementation now.
+
+        Keep the scope focused on the agreed GameEngine turn/dice orchestration work, update the related tests, update the relevant `prodetayi/` summary, and add one dated `yapilanlar/` note. Do not ask another clarification question unless a build-blocking ambiguity remains. Do not include secrets or `.env` values.
+        """;
     }
 
     private static string BuildAwaitingInputRecoveryPrompt(ProjectSettings settings, string trackedSessionId, string sessionsOutput)
@@ -857,6 +1029,10 @@ public sealed class TavlaAgentService
             $"awaitingInputAlreadyHandled={automation.AwaitingInputAlreadyHandled}",
             $"awaitingInputRecoveryStarted={automation.AwaitingInputRecoveryStarted}",
             $"awaitingInputRecoverySession={automation.AwaitingInputRecoverySession}",
+            $"awaitingInputReplySent={automation.AwaitingInputReplySent}",
+            $"awaitingPlanApprovalSent={automation.AwaitingPlanApprovalSent}",
+            $"awaitingInputSessionIds={string.Join(",", automation.AwaitingInputSessionIds)}",
+            $"awaitingPlanSessionIds={string.Join(",", automation.AwaitingPlanSessionIds)}",
             $"appliedThisTurn={automation.AppliedThisTurn}",
             $"alreadyApplied={automation.AlreadyApplied}",
             $"duplicateCompletedSession={automation.DuplicateCompletedSession}",
@@ -867,6 +1043,16 @@ public sealed class TavlaAgentService
         AddCommandLine(lines, "gitStatusBefore", automation.GitStatusBeforeApply);
         AddCommandLine(lines, "julesPull", automation.JulesPullResult);
         AddCommandLine(lines, "julesApply", automation.JulesApplyResult);
+        foreach (var replyResult in automation.AwaitingInputReplyResults)
+        {
+            AddCommandLine(lines, "julesReply", replyResult);
+        }
+
+        foreach (var approvalResult in automation.AwaitingPlanApprovalResults)
+        {
+            AddCommandLine(lines, "julesPlanApproval", approvalResult);
+        }
+
         AddCommandLine(lines, "dotnetBuild", automation.VerificationBuildResult);
         AddCommandLine(lines, "dotnetTest", automation.VerificationTestResult);
         AddCommandLine(lines, "gitStage", automation.GitStageResult);
