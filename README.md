@@ -6,6 +6,8 @@ Ilk hedef:
 - Jules ile telefon icin tavla uygulamasi yaptirma surecini fazlara ayirmak.
 - OpenRouter model ayarlarini tek yerde takip etmek.
 - GitHub reposu `kaanx2311336/julestavla` uzerinden Jules remote session baslatmak.
+- `openai/gpt-oss-120b:free` ajan modelini dakika basi Jules durumunu izlemek ve sonraki promptu tasarlamak icin kullanmak.
+- Aiven `tavla_online` MySQL baglantisini `.env` icindeki `TAVLA_ONLINE_MYSQL` ile test etmek.
 - EXE olarak Windows'ta calisan bir kontrol paneli uretmek.
 
 ## Calistirma
@@ -21,6 +23,21 @@ dotnet publish .\src\TavlaJules.App\TavlaJules.App.csproj -c Release -r win-x64 
 ```
 
 API anahtarini `.env` icinde `OPENROUTER_API_KEY` olarak tut.
+
+`TAVLA_ONLINE_MYSQL` ornek bicim:
+
+```text
+Server=HOST;Port=PORT;Database=tavla_online;Uid=USER;Pwd=PASSWORD;SslMode=Required
+```
+
+## Dakikalik ajan
+
+Paneldeki `Ajan baslat` dugmesi, her 60 saniyede:
+- Jules session listesini okur.
+- Izlenen session tamamlandiysa `jules remote pull --session <id>` ile sonucu ceker, uygulamaz.
+- `prodetayi/` ve `yapilanlar/` hafizasini OpenRouter ajanina verir.
+- Sonraki Jules promptunu tasarlar ve `agent_reports/` altina JSON raporu yazar.
+- Otomatik yeni Jules gorevi acma kutusu isaretli degilse sadece onerir.
 
 ## Jules
 

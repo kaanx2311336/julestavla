@@ -1,0 +1,4 @@
+`DatabaseHealthResult.cs`, Aiven `tavla_online` MySQL kontrol sonucunu tasir.
+
+- Baglanti tanimli mi, basarili mi, tablo sayisi ve mesaj alanlarini icerir.
+- `DatabaseHealthService` ve `TavlaAgentService` tarafindan kullanilir.

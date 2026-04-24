@@ -5,3 +5,5 @@
 - OpenRouter API anahtarinin `.env` icinde tutulmasi gerektigini belirtir.
 - GitHub repo hedefinin `kaanx2311336/julestavla` oldugunu belirtir.
 - `jules new --repo ...` ile remote Jules session baslatma ornegi verir.
+- Dakikalik ajanin Jules session listesini okudugunu, gerekirse pull yaptigini, OpenRouter ile sonraki promptu tasarladigini ve raporu `agent_reports/` altina yazdigini aciklar.
+- Aiven `tavla_online` MySQL connection string ornegini verir.

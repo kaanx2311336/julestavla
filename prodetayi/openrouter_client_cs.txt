@@ -5,3 +5,6 @@
 - Primary model `OpenRouterModel` uzerinden denenir.
 - 400/408/429/5xx gibi gecici veya model kaynakli hatalarda `OpenRouterFallbackModels` sirayla denenir.
 - Basarili cevapta kullanilan modeli ve kisa test yanitini UI gunlugune dondurur.
+- `CompleteAsync`, dakikalik TavlaJules ajaninin sistem/user promptlarini OpenRouter'a gonderir.
+- Ajan icin birincil model `AgentModel` alanidir; varsayilan `openai/gpt-oss-120b:free`.
+- Primary ajan modeli gecici hata verirse ayni fallback zinciri kullanilir.

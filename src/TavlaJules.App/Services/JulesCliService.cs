@@ -21,6 +21,27 @@ public sealed class JulesCliService
         return RunAsync(settings.ProjectFolder, settings.JulesCommand, arguments, cancellationToken);
     }
 
+    public Task<CommandResult> ListSessionsAsync(ProjectSettings settings, CancellationToken cancellationToken = default)
+    {
+        return RunAsync(settings.ProjectFolder, settings.JulesCommand, "remote list --session", cancellationToken);
+    }
+
+    public Task<CommandResult> PullSessionAsync(ProjectSettings settings, string sessionId, bool apply, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new InvalidOperationException("Pull icin Jules session ID bos olamaz.");
+        }
+
+        var arguments = $"remote pull --session {Quote(sessionId)}";
+        if (apply)
+        {
+            arguments += " --apply";
+        }
+
+        return RunAsync(settings.ProjectFolder, settings.JulesCommand, arguments, cancellationToken);
+    }
+
     private static async Task<CommandResult> RunAsync(string workingDirectory, string fileName, string arguments, CancellationToken cancellationToken)
     {
         var startInfo = new ProcessStartInfo

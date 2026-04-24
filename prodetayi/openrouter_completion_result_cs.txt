@@ -1,0 +1,5 @@
+`OpenRouterCompletionResult.cs`, OpenRouter ajan cevap sonucunu tasir.
+
+- `Model`: cevabi ureten model.
+- `Content`: modelin dondugu metin/JSON.
+- `TavlaAgentService` tarafindan hangi modelin kullanildigini UI ve rapora yazmak icin kullanilir.

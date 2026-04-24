@@ -11,19 +11,28 @@ public sealed class MainForm : Form
     private readonly EnvFileService envFileService = new();
     private readonly OpenRouterClient openRouterClient = new();
     private readonly JulesCliService julesCliService = new();
+    private readonly TavlaAgentService tavlaAgentService = new();
+    private readonly DatabaseHealthService databaseHealthService = new();
+    private readonly System.Windows.Forms.Timer agentTimer = new();
 
     private readonly TextBox folderTextBox = new();
     private readonly TextBox repoTextBox = new();
     private readonly TextBox julesUrlTextBox = new();
     private readonly TextBox modelTextBox = new();
     private readonly TextBox apiKeyTextBox = new();
+    private readonly TextBox sessionIdTextBox = new();
+    private readonly TextBox dbConnectionTextBox = new();
+    private readonly CheckBox autoJulesCheckBox = new();
     private readonly TextBox goalTextBox = new();
     private readonly TextBox julesPromptTextBox = new();
     private readonly ListView phaseListView = new();
     private readonly TextBox logTextBox = new();
     private readonly Label statusLabel = new();
+    private readonly Button agentToggleButton = new();
 
     private ProjectSettings settings = new();
+    private bool agentIsRunning;
+    private bool agentTickInProgress;
 
     public MainForm()
     {
@@ -31,6 +40,7 @@ public sealed class MainForm : Form
         InitializeWindow();
         BuildLayout();
         LoadSettingsToUi();
+        ConfigureAgentTimer();
         RefreshPhaseList();
         AppendLog("TavlaJules kontrol paneli hazir.");
     }
@@ -166,16 +176,18 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 7,
+            RowCount = 9,
             BackColor = panel.BackColor
         };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 36));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 26));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 24));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 112));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 22));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 40));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 52));
 
         phaseListView.Dock = DockStyle.Fill;
         phaseListView.View = View.Details;
@@ -215,14 +227,73 @@ public sealed class MainForm : Form
 
         layout.Controls.Add(CreateSectionTitle("Yol Haritasi"), 0, 0);
         layout.Controls.Add(phaseListView, 0, 1);
-        layout.Controls.Add(CreateSectionTitle("Jules Gorev Promptu"), 0, 2);
-        layout.Controls.Add(julesPromptTextBox, 0, 3);
-        layout.Controls.Add(julesButtonRow, 0, 4);
-        layout.Controls.Add(CreateSectionTitle("Calisma Gunlugu"), 0, 5);
-        layout.Controls.Add(logTextBox, 0, 6);
+        layout.Controls.Add(CreateSectionTitle("Ajan Ayarlari"), 0, 2);
+        layout.Controls.Add(BuildAgentPanel(), 0, 3);
+        layout.Controls.Add(CreateSectionTitle("Jules Gorev Promptu"), 0, 4);
+        layout.Controls.Add(julesPromptTextBox, 0, 5);
+        layout.Controls.Add(julesButtonRow, 0, 6);
+        layout.Controls.Add(CreateSectionTitle("Calisma Gunlugu"), 0, 7);
+        layout.Controls.Add(logTextBox, 0, 8);
 
         panel.Controls.Add(layout);
         return panel;
+    }
+
+    private Control BuildAgentPanel()
+    {
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 3,
+            BackColor = Color.Transparent
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+
+        layout.Controls.Add(CreateInputGroup("Izlenen Jules session", sessionIdTextBox), 0, 0);
+        layout.Controls.Add(CreateDbConnectionGroup(), 1, 0);
+
+        autoJulesCheckBox.Dock = DockStyle.Fill;
+        autoJulesCheckBox.Text = "Onerilen yeni Jules gorevini otomatik baslat";
+        autoJulesCheckBox.ForeColor = Color.FromArgb(162, 176, 205);
+        autoJulesCheckBox.BackColor = Color.Transparent;
+        layout.Controls.Add(autoJulesCheckBox, 0, 1);
+
+        var intervalLabel = CreateHintLabel($"Ajan araligi: {settings.AgentIntervalSeconds} saniye");
+        layout.Controls.Add(intervalLabel, 1, 1);
+
+        var buttons = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 3,
+            RowCount = 1,
+            BackColor = Color.Transparent
+        };
+        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
+        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33));
+        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33));
+
+        agentToggleButton.Dock = DockStyle.Fill;
+        agentToggleButton.Text = "Ajan baslat";
+        agentToggleButton.FlatStyle = FlatStyle.Flat;
+        agentToggleButton.BackColor = Color.FromArgb(38, 93, 221);
+        agentToggleButton.ForeColor = Color.White;
+        agentToggleButton.Margin = new Padding(0, 3, 6, 3);
+        agentToggleButton.Cursor = Cursors.Hand;
+        agentToggleButton.FlatAppearance.BorderSize = 0;
+        agentToggleButton.Click += (_, _) => ToggleAgent();
+
+        buttons.Controls.Add(agentToggleButton, 0, 0);
+        buttons.Controls.Add(CreateButton("Ajan tek tur", async (_, _) => await RunAgentOnceAsync()), 1, 0);
+        buttons.Controls.Add(CreateButton("DB test", async (_, _) => await TestDatabaseAsync()), 2, 0);
+        layout.SetColumnSpan(buttons, 2);
+        layout.Controls.Add(buttons, 0, 2);
+
+        return layout;
     }
 
     private Control BuildStatusBar()
@@ -287,6 +358,13 @@ public sealed class MainForm : Form
     {
         var group = (TableLayoutPanel)CreateInputGroup("OpenRouter API key", apiKeyTextBox);
         apiKeyTextBox.UseSystemPasswordChar = true;
+        return group;
+    }
+
+    private Control CreateDbConnectionGroup()
+    {
+        var group = (TableLayoutPanel)CreateInputGroup("Aiven tavla_online MySQL", dbConnectionTextBox);
+        dbConnectionTextBox.UseSystemPasswordChar = true;
         return group;
     }
 
@@ -361,8 +439,11 @@ public sealed class MainForm : Form
         repoTextBox.Text = settings.GitHubRepo;
         julesUrlTextBox.Text = settings.JulesUrl;
         modelTextBox.Text = settings.OpenRouterModel;
+        sessionIdTextBox.Text = settings.TrackedJulesSessionId;
+        autoJulesCheckBox.Checked = settings.AllowAutoJulesSessions;
         goalTextBox.Text = settings.Goal;
         UpdateApiKeyPlaceholder();
+        UpdateDatabasePlaceholder();
     }
 
     private void CaptureSettingsFromUi()
@@ -371,6 +452,9 @@ public sealed class MainForm : Form
         settings.GitHubRepo = repoTextBox.Text.Trim();
         settings.JulesUrl = julesUrlTextBox.Text.Trim();
         settings.OpenRouterModel = modelTextBox.Text.Trim();
+        settings.AgentModel = settings.OpenRouterModel;
+        settings.TrackedJulesSessionId = sessionIdTextBox.Text.Trim();
+        settings.AllowAutoJulesSessions = autoJulesCheckBox.Checked;
         settings.Goal = goalTextBox.Text.Trim();
     }
 
@@ -389,6 +473,7 @@ public sealed class MainForm : Form
         var values = new Dictionary<string, string>
         {
             ["OPENROUTER_MODEL"] = settings.OpenRouterModel,
+            ["OPENROUTER_AGENT_MODEL"] = settings.AgentModel,
             ["OPENROUTER_FALLBACK_MODELS"] = settings.OpenRouterFallbackModels,
             ["OPENROUTER_API_URL"] = settings.OpenRouterEndpoint,
             ["JULES_URL"] = settings.JulesUrl,
@@ -401,9 +486,17 @@ public sealed class MainForm : Form
             values["OPENROUTER_API_KEY"] = typedApiKey;
         }
 
+        var typedDbConnection = dbConnectionTextBox.Text.Trim();
+        if (!string.IsNullOrWhiteSpace(typedDbConnection))
+        {
+            values["TAVLA_ONLINE_MYSQL"] = typedDbConnection;
+        }
+
         envFileService.UpsertValues(settings.ProjectFolder, values);
         apiKeyTextBox.Clear();
+        dbConnectionTextBox.Clear();
         UpdateApiKeyPlaceholder();
+        UpdateDatabasePlaceholder();
     }
 
     private async Task TestOpenRouterAsync()
@@ -489,6 +582,114 @@ public sealed class MainForm : Form
         }
     }
 
+    private void ConfigureAgentTimer()
+    {
+        agentTimer.Interval = Math.Max(15, settings.AgentIntervalSeconds) * 1000;
+        agentTimer.Tick += async (_, _) =>
+        {
+            if (agentTickInProgress)
+            {
+                AppendLog("Ajan onceki turu bitirmedigi icin bu dakika atlandi.");
+                return;
+            }
+
+            await RunAgentOnceAsync();
+        };
+    }
+
+    private void ToggleAgent()
+    {
+        CaptureSettingsFromUi();
+        settingsService.Save(settings);
+        SaveEnvValues();
+
+        agentIsRunning = !agentIsRunning;
+        agentTimer.Interval = Math.Max(15, settings.AgentIntervalSeconds) * 1000;
+        agentToggleButton.Text = agentIsRunning ? "Ajan durdur" : "Ajan baslat";
+
+        if (agentIsRunning)
+        {
+            agentTimer.Start();
+            AppendLog("Dakikalik TavlaJules ajani baslatildi.");
+            statusLabel.Text = "Ajan izliyor";
+        }
+        else
+        {
+            agentTimer.Stop();
+            AppendLog("Dakikalik TavlaJules ajani durduruldu.");
+            statusLabel.Text = "Ajan durdu";
+        }
+    }
+
+    private async Task RunAgentOnceAsync()
+    {
+        if (agentTickInProgress)
+        {
+            return;
+        }
+
+        try
+        {
+            agentTickInProgress = true;
+            CaptureSettingsFromUi();
+            settingsService.Save(settings);
+            SaveEnvValues();
+
+            var apiKey = envFileService.GetValue(settings.ProjectFolder, "OPENROUTER_API_KEY") ?? "";
+            var dbConnection = envFileService.GetValue(settings.ProjectFolder, "TAVLA_ONLINE_MYSQL");
+
+            AppendLog("TavlaJules ajani tek tur basladi.");
+            statusLabel.Text = "Ajan Jules ve OpenRouter kontrol ediyor...";
+            var result = await tavlaAgentService.RunOnceAsync(settings, apiKey, dbConnection);
+
+            AppendLog($"Ajan modeli: {result.UsedModel}");
+            AppendLog($"Ajan raporu: {result.ReportPath}");
+            AppendLog(TrimForLog(result.Analysis));
+
+            if (!string.IsNullOrWhiteSpace(result.NextPrompt))
+            {
+                julesPromptTextBox.Text = result.NextPrompt;
+            }
+
+            if (result.AutoJulesSessionResult is not null)
+            {
+                AppendCommandResult("Ajan otomatik Jules gorevi", result.AutoJulesSessionResult);
+            }
+
+            statusLabel.Text = "Ajan turu tamamlandi";
+        }
+        catch (Exception exception)
+        {
+            AppendLog($"Ajan turu basarisiz: {exception.Message}");
+            statusLabel.Text = "Ajan hatasi";
+        }
+        finally
+        {
+            agentTickInProgress = false;
+        }
+    }
+
+    private async Task TestDatabaseAsync()
+    {
+        try
+        {
+            CaptureSettingsFromUi();
+            settingsService.Save(settings);
+            SaveEnvValues();
+
+            AppendLog("tavla_online DB testi basladi.");
+            var connectionString = envFileService.GetValue(settings.ProjectFolder, "TAVLA_ONLINE_MYSQL");
+            var result = await databaseHealthService.TestAsync(connectionString);
+            AppendLog(result.Message);
+            statusLabel.Text = result.IsSuccess ? "DB baglantisi tamam" : "DB baglantisi hazir degil";
+        }
+        catch (Exception exception)
+        {
+            AppendLog($"DB testi basarisiz: {exception.Message}");
+            statusLabel.Text = "DB testi basarisiz";
+        }
+    }
+
     private void RefreshPhaseList()
     {
         phaseListView.Items.Clear();
@@ -558,6 +759,13 @@ public sealed class MainForm : Form
         apiKeyTextBox.PlaceholderText = envFileService.HasValue(settings.ProjectFolder, "OPENROUTER_API_KEY")
             ? "Mevcut .env anahtari korunacak"
             : "OpenRouter API key gir";
+    }
+
+    private void UpdateDatabasePlaceholder()
+    {
+        dbConnectionTextBox.PlaceholderText = envFileService.HasValue(settings.ProjectFolder, "TAVLA_ONLINE_MYSQL")
+            ? "Mevcut .env DB baglantisi korunacak"
+            : "Server=...;Port=...;Database=tavla_online;Uid=...;Pwd=...;SslMode=Required";
     }
 
     private static string CreateDefaultJulesPrompt()

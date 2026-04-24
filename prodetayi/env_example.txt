@@ -2,7 +2,9 @@
 
 - `OPENROUTER_API_KEY` bos birakilir; gercek anahtar `.env` dosyasinda tutulmalidir.
 - Varsayilan model `openai/gpt-oss-120b:free`.
+- Dakikalik ajan modeli `OPENROUTER_AGENT_MODEL=openai/gpt-oss-120b:free`.
 - Fallback modeller `OPENROUTER_FALLBACK_MODELS` ile tutulur.
 - OpenRouter endpoint'i `OPENROUTER_API_URL` alaninda tutulur.
 - Varsayilan Jules adresi `https://jules.google.com`.
 - Varsayilan GitHub repo `kaanx2311336/julestavla`.
+- Aiven `tavla_online` MySQL baglantisi `TAVLA_ONLINE_MYSQL` ile tutulur.

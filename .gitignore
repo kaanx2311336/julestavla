@@ -4,3 +4,5 @@ obj/
 .env
 *.user
 publish/
+agent_reports/
+agent_state/

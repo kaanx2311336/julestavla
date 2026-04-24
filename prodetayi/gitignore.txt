@@ -4,3 +4,4 @@
 - Visual Studio klasoru: `.vs/`.
 - Gizli ortam dosyasi: `.env`.
 - Kullaniciya ozel proje ayarlari: `*.user`.
+- Dakikalik ajan ciktilari: `agent_reports/`, `agent_state/`.

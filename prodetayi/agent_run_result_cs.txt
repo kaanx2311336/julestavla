@@ -1,0 +1,5 @@
+`AgentRunResult.cs`, dakikalik TavlaJules ajaninin tek tur sonucudur.
+
+- Kullanilan model, analiz metni, onerilen sonraki Jules promptu ve rapor yolu tutulur.
+- Jules session listesi ve varsa pull ozeti saklanir.
+- Otomatik Jules session acildiyse komut sonucu `AutoJulesSessionResult` ile tasinir.

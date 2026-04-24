@@ -1,0 +1,14 @@
+2026-04-24 - Dakikalik OpenRouter/Jules orkestrator ajani eklendi.
+
+Yapilanlar:
+- `ProjectSettings` icine ajan modeli, 60 saniyelik interval, izlenen Jules session ID ve otomatik session acma ayari eklendi.
+- `OpenRouterClient` genellestirildi; baglanti testi disinda sistem/user promptlariyla ajan analizi yapabiliyor.
+- `TavlaAgentService` eklendi; Jules session listesini okur, tamamlanan session icin pull ozeti alir, prodetayi/yapilanlar hafizasini toplar ve OpenRouter ile sonraki promptu tasarlar.
+- Varsayilan ajan modeli `openai/gpt-oss-120b:free` olarak ayarlandi; gecici provider sorunlarinda fallback modeller denenir.
+- `MainForm` icine `Ajan Ayarlari`, `Ajan baslat`, `Ajan tek tur`, `DB test`, izlenen session ID ve Aiven MySQL connection string alanlari eklendi.
+- Aiven `tavla_online` MySQL baglanti testi icin `MySqlConnector` paketi ve `DatabaseHealthService` eklendi.
+- Ajan raporlari `agent_reports/` altina yazilir ve `.gitignore` ile repoya alinmaz.
+
+Notlar:
+- Aiven connection string `.env` icinde `TAVLA_ONLINE_MYSQL` olarak tutulacak.
+- Otomatik yeni Jules session acma varsayilan kapali; UI'daki checkbox ile acilir.

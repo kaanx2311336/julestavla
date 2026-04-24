@@ -7,4 +7,8 @@
 - `OpenRouterModel`: kontrol icin hedef OpenRouter modeli.
 - `OpenRouterFallbackModels`: primary model 503/429 gibi gecici hata verirse denenebilecek modeller.
 - `OpenRouterEndpoint`: OpenRouter chat completions endpoint'i.
+- `AgentModel`: dakikalik orkestrator ajanin birincil modeli; varsayilan `openai/gpt-oss-120b:free`.
+- `AgentIntervalSeconds`: ajan periyodu; varsayilan 60 saniye.
+- `TrackedJulesSessionId`: dakika basi izlenecek Jules session ID.
+- `AllowAutoJulesSessions`: true olursa ajan, modelin onerisine gore yeni Jules session acabilir.
 - `Goal`: projenin genel hedef metni.

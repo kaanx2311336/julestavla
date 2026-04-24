@@ -1,0 +1,10 @@
+`TavlaAgentService.cs`, TavlaJules dakikalik orkestrator ajanidir.
+
+- `jules remote list --session` ile Jules durumlarini okur.
+- Izlenen session tamamlanmis gorunurse `jules remote pull --session <id>` ile sonucu ceker ama patch'i uygulamaz.
+- Aiven `tavla_online` DB saglik durumunu okur.
+- `prodetayi/` ve `yapilanlar/` hafizasini toplayip OpenRouter ajanina verir.
+- OpenRouter sistem promptu, Batak projesine benzer fazli/prodetayi/yapilanlar disiplinini koruyacak sekilde tasarlandi.
+- Modelden JSON bekler: durum ozeti, Jules'in yaptiklari, sonraki prompt, otomatik session onayi, DB plani ve risk notlari.
+- Her turu `agent_reports/YYYY_MM_DD_HH_mm_ss_agent_report.json` dosyasina yazar.
+- `AllowAutoJulesSessions` true ise ve model de onay verirse yeni Jules session baslatabilir; varsayilan guvenli davranis yalnizca onermektir.

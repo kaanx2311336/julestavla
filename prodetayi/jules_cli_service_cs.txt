@@ -2,5 +2,7 @@
 
 - `VersionAsync`, `jules.cmd version` ile CLI'nin hazir olup olmadigini kontrol eder.
 - `CreateSessionAsync`, `jules.cmd new --repo <repo> "<prompt>"` ile Jules remote session baslatir.
+- `ListSessionsAsync`, `jules.cmd remote list --session` ile tum Jules session durumlarini okur.
+- `PullSessionAsync`, `jules.cmd remote pull --session <id>` ile tamamlanan session sonucunu ceker; `apply` true verilirse patch'i uygular.
 - Komutlar proje klasoru calisma diziniyle calisir.
 - Standart cikti, hata cikisi ve exit code `CommandResult` olarak UI'a tasinir.

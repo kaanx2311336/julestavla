@@ -4,3 +4,4 @@
 - Hedef framework `net9.0-windows`.
 - Windows Forms destegi `UseWindowsForms=true` ile aciktir.
 - Nullable ve implicit using ozellikleri aciktir.
+- Aiven MySQL baglanti testi icin `MySqlConnector` paket referansi vardir.
