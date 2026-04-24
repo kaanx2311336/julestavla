@@ -11,3 +11,4 @@ Summarizes the `GameEngineTests` class located at `src/TavlaJules.Engine.Tests/E
     * Turn completion and player switching logic `AdvanceTurn` validations.
     * `GenerateLegalMoves` yielding properly constrained board moves per existing dice.
     * Explicit dice `GenerateLegalMoves(PlayerColor, (die1, die2))` tests for dice metadata, blocked points, bar-entry priority, and bearing-off with larger dice.
+    * Move Sequence sequences `GenerateLegalMoveSequences` handling complete sequence branching, maximal dice consumption fallback, and forcing the play of higher die.

@@ -1,0 +1,18 @@
+2026-04-25 - Full-turn legal move sequence generation (TavlaJules engine phase)
+
+Sorun/Gereksinim:
+- Mevcut `GenerateLegalMoves` metodu sadece tekil hamleleri veriyordu.
+- Tavla kurallarina gore zarlar bitene kadar pes pese gecerli hamle zincirleri kurulmali, hamle agaci icinden en fazla zari oynatan sekanslar secilmelidir.
+
+Yapilan degisiklikler:
+- `Board` modeline `Clone()` metodu eklendi. (Oyun durumu hafif oldugu icin `Points` ve `CheckerCount` kopyalamasi ile saglandi).
+- `GameEngine` icine `GenerateLegalMoveSequences(PlayerColor, (int, int))` eklendi.
+- `GenerateSequencesRecursive` yardimci metodu ile gecerli tekil hamlelerden agac dallanmasi yapildi ve her dal bir zincir olarak `Move[]` listesine donusturuldu.
+- `IsBearingOffMove` ve `ApplyCoreMoveLogic` internal modifier'siz, helper seviyesinde sequence simulator ile birleserek gecici tahtalara uygulandi.
+- Agactaki dal secim kurallari uygulandi:
+  - En fazla zari kullanan yollar dondurulur.
+  - Sadece tek zar oynanabilen durumlarda cift zarlar haricinde, buyuk olan zar oynamak zorunda. (Tavla kuralı)
+
+Test ve Dogrulama:
+- `GameEngineTests` icinde `GenerateLegalMoveSequences_ReturnsSequencesConsumingAllDice`, `GenerateLegalMoveSequences_BlockedDie_ReturnsMaxPossibleDice`, ve `GenerateLegalMoveSequences_MustPlayHigherDie_WhenOnlyOneCanBePlayed` senaryolari eklendi.
+- Toplam test sayisi 37'ye yukseldi, hata olusmadi.

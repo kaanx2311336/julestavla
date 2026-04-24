@@ -321,6 +321,89 @@ public class GameEngineTests
         Assert.Contains(legalMoves, move => move.SourcePoint == 24 && move.DestinationPoint == 25 && move.DiceUsed == 1);
     }
 
+    [Fact]
+    public void GenerateLegalMoveSequences_ReturnsSequencesConsumingAllDice()
+    {
+        var board = CreateEmptyBoard();
+        board.Points[1].CheckerCount = 2;
+        board.Points[1].Color = PlayerColor.White;
+
+        var engine = new GameEngine(board);
+        var sequences = engine.GenerateLegalMoveSequences(PlayerColor.White, (2, 3)).ToList();
+
+        // Should return sequences of length 2
+        Assert.NotEmpty(sequences);
+        Assert.All(sequences, s => Assert.Equal(2, s.Count));
+        
+        // Sequence options (can move 1 checker 1->3->6 or 1->4->6, or two checkers 1->3 and 1->4)
+        var seq1 = sequences.FirstOrDefault(s => s[0].SourcePoint == 1 && s[0].DestinationPoint == 3 && s[1].SourcePoint == 1 && s[1].DestinationPoint == 4);
+        var seq2 = sequences.FirstOrDefault(s => s[0].SourcePoint == 1 && s[0].DestinationPoint == 4 && s[1].SourcePoint == 1 && s[1].DestinationPoint == 3);
+        
+        Assert.True(seq1 != null || seq2 != null);
+    }
+
+    [Fact]
+    public void GenerateLegalMoveSequences_BlockedDie_ReturnsMaxPossibleDice()
+    {
+        var board = CreateEmptyBoard();
+        board.Points[1].CheckerCount = 1;
+        board.Points[1].Color = PlayerColor.White;
+        
+        // Block point 4 (prevents using die 3 directly from 1)
+        board.Points[4].CheckerCount = 2;
+        board.Points[4].Color = PlayerColor.Black;
+        
+        // Block point 6 (prevents 1 -> 3 -> 6, meaning if we play 2 first, we can't play 3 next)
+        board.Points[6].CheckerCount = 2;
+        board.Points[6].Color = PlayerColor.Black;
+
+        var engine = new GameEngine(board);
+        var sequences = engine.GenerateLegalMoveSequences(PlayerColor.White, (2, 3)).ToList();
+
+        // The only move is 1 -> 3 (uses die 2). From 3, playing 3 would go to 6, which is blocked.
+        Assert.NotEmpty(sequences);
+        Assert.All(sequences, s => Assert.Single(s));
+        Assert.Contains(sequences, s => s[0].DestinationPoint == 3 && s[0].DiceUsed == 2);
+    }
+
+    [Fact]
+    public void GenerateLegalMoveSequences_MustPlayHigherDie_WhenOnlyOneCanBePlayed()
+    {
+        var board = CreateEmptyBoard();
+        board.Points[1].CheckerCount = 1;
+        board.Points[1].Color = PlayerColor.White;
+
+        // Block point 4 and point 6 (like above)
+        board.Points[4].CheckerCount = 2;
+        board.Points[4].Color = PlayerColor.Black;
+        board.Points[6].CheckerCount = 2;
+        board.Points[6].Color = PlayerColor.Black;
+
+        // But what if we swap the dice to 5 and 2?
+        // Move from 1 using 2 -> 3 (allowed) -> from 3 using 5 -> 8 (blocked let's say)
+        // Move from 1 using 5 -> 6 (allowed) -> from 6 using 2 -> 8 (blocked let's say)
+        board.Points[8].CheckerCount = 2;
+        board.Points[8].Color = PlayerColor.Black;
+        
+        // Unblock 6 so we can play the 5. 
+        board.Points[6].CheckerCount = 0;
+        board.Points[6].Color = PlayerColor.None;
+
+        // Now:
+        // Play 2: 1 -> 3. Next needs 5, goes to 8 (blocked). Max length 1.
+        // Play 5: 1 -> 6. Next needs 2, goes to 8 (blocked). Max length 1.
+        // Rule: Must play the higher die (5).
+        
+        var engine = new GameEngine(board);
+        var sequences = engine.GenerateLegalMoveSequences(PlayerColor.White, (5, 2)).ToList();
+
+        Assert.NotEmpty(sequences);
+        Assert.All(sequences, s => Assert.Single(s));
+        // Only the move using die 5 should be returned.
+        Assert.Contains(sequences, s => s[0].DestinationPoint == 6 && s[0].DiceUsed == 5);
+        Assert.DoesNotContain(sequences, s => s[0].DiceUsed == 2);
+    }
+
     private static Board CreateEmptyBoard()
     {
         var board = new Board();

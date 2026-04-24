@@ -48,4 +48,22 @@ public class Board
         Points[index].Color = color;
         Points[index].CheckerCount = count;
     }
+
+    public Board Clone()
+    {
+        var clone = new Board();
+        // Board constructor calls InitializeStartingPosition, so we overwrite the points.
+        for (int i = 1; i <= 24; i++)
+        {
+            clone.Points[i].Color = this.Points[i].Color;
+            clone.Points[i].CheckerCount = this.Points[i].CheckerCount;
+        }
+
+        clone.WhiteCheckersOnBar = this.WhiteCheckersOnBar;
+        clone.BlackCheckersOnBar = this.BlackCheckersOnBar;
+        clone.WhiteCheckersBorneOff = this.WhiteCheckersBorneOff;
+        clone.BlackCheckersBorneOff = this.BlackCheckersBorneOff;
+
+        return clone;
+    }
 }
