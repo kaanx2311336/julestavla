@@ -1,0 +1,14 @@
+2026-04-25 - Completed implemented hedefinden sonraki faza gecis
+
+Sorun:
+- `11702109680884455400` completed oldugu halde hedef lokal kodda zaten uygulanmis sayildigi icin `pull --apply` atlandi.
+- OpenRouter `nextPrompt:null` dondurdugu icin ajan ayni completed session'i izlemeye devam ediyor ve dashboard her dakika ayni ozeti yaziyordu.
+- Ilk duzeltmede full-turn move sequence promptu icinde `GameEngine.GenerateLegalMoves` referansi gectigi icin hedef yanlislikla yine legal-move sayildi.
+
+Yapilan:
+- Completed hedef zaten uygulanmis ise ve OpenRouter nextPrompt vermediyse ajan lokal oyun yol haritasindan sonraki fazi secer.
+- Hedef siniflandirma sirasinda `move sequence/full-turn/complete turn` ifadeleri `GenerateLegalMoves` kontrolunden once ele alindi.
+- Canli testte yeni Jules session `7074474161208715718` acildi ve tracked session bu yeni full-turn move sequence fazina cevrildi.
+
+Dogrulama:
+- `jules remote list --session` yeni session'i `Create the next TavlaJules engine phase: full-turn legal move sequence generation` olarak gosterdi.

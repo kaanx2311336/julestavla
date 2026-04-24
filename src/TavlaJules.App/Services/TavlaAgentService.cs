@@ -67,6 +67,24 @@ public sealed class TavlaAgentService
             var proposedNextPrompt = ExtractString(completion.Content, "nextPrompt");
             var nextPrompt = SelectNextPrompt(settings, proposedNextPrompt, relevantSessionsOutput, events);
             var shouldStart = ExtractBool(completion.Content, "shouldStartNewJulesSession");
+            var shouldStartNextImplementedPhase = settings.AutoContinueCompletedSessions
+                && automation.TrackedSessionCompleted
+                && automation.AlreadyApplied
+                && !automation.AutomationBlocked;
+            if (string.IsNullOrWhiteSpace(nextPrompt) && shouldStartNextImplementedPhase)
+            {
+                var completedObjectiveKey = BuildPromptObjectiveKey(TryGetSessionDescription(relevantSessionsOutput, trackedSessionIdAtStart));
+                nextPrompt = BuildNextGameImprovementPrompt(settings, completedObjectiveKey);
+                if (!string.IsNullOrWhiteSpace(nextPrompt))
+                {
+                    events.Add(CreateEvent(
+                        "next_game_phase_selected",
+                        "info",
+                        "Completed hedef zaten uygulanmis oldugu icin lokal oyun yol haritasindan sonraki faz secildi.",
+                        new { completedObjectiveKey, nextObjectiveKey = BuildPromptObjectiveKey(nextPrompt) }));
+                }
+            }
+
             var shouldContinueCompletedSession = settings.AutoContinueCompletedSessions
                 && automation.TrackedSessionCompleted
                 && !automation.AutomationBlocked
@@ -84,7 +102,7 @@ public sealed class TavlaAgentService
             var newJulesSessionId = "";
 
             if (!trackedSessionBusy
-                && (shouldRecoverAwaitingInputSession || (settings.AllowAutoJulesSessions && shouldStart) || shouldContinueCompletedSession)
+                && (shouldRecoverAwaitingInputSession || (settings.AllowAutoJulesSessions && shouldStart) || shouldContinueCompletedSession || shouldStartNextImplementedPhase)
                 && !string.IsNullOrWhiteSpace(promptToSend))
             {
                 if (IsPromptObjectiveImplemented(settings.ProjectFolder, promptObjectiveKey))
@@ -148,11 +166,21 @@ public sealed class TavlaAgentService
                         }
                     }
 
+                    if (autoResult.IsSuccess && shouldStartNextImplementedPhase)
+                    {
+                        agentStateService.MarkCompletedSessionHandled(settings, trackedSessionIdAtStart, newJulesSessionId);
+
+                        if (!string.IsNullOrWhiteSpace(newJulesSessionId))
+                        {
+                            settings.TrackedJulesSessionId = newJulesSessionId;
+                        }
+                    }
+
                     events.Add(CreateEvent(
                         "auto_jules_session_created",
                         autoResult.IsSuccess ? "info" : "error",
                         "Ajan otomatik Jules session denemesi yapti.",
-                        new { autoResult.ExitCode, continuedFromSessionId = trackedSessionIdAtStart, newJulesSessionId, shouldContinueCompletedSession, shouldRecoverAwaitingInputSession }));
+                        new { autoResult.ExitCode, continuedFromSessionId = trackedSessionIdAtStart, newJulesSessionId, shouldContinueCompletedSession, shouldRecoverAwaitingInputSession, shouldStartNextImplementedPhase }));
                 }
             }
             else if (automation.TrackedSessionAwaitingInput)
@@ -1001,6 +1029,15 @@ public sealed class TavlaAgentService
         }
 
         var normalized = NormalizeSessionDescription(prompt);
+        if (normalized.Contains("movesequence", StringComparison.Ordinal)
+            || normalized.Contains("move sequence", StringComparison.Ordinal)
+            || normalized.Contains("full-turn", StringComparison.Ordinal)
+            || normalized.Contains("full turn", StringComparison.Ordinal)
+            || normalized.Contains("complete turn", StringComparison.Ordinal))
+        {
+            return "engine.move-sequences";
+        }
+
         if (normalized.Contains("generatelegalmoves", StringComparison.Ordinal)
             || normalized.Contains("generate legal moves", StringComparison.Ordinal))
         {
@@ -1010,14 +1047,6 @@ public sealed class TavlaAgentService
                 || normalized.Contains("supplied dice", StringComparison.Ordinal)
                 ? "engine.generate-legal-moves-explicit-dice"
                 : "engine.generate-legal-moves-current-turn";
-        }
-
-        if (normalized.Contains("movesequence", StringComparison.Ordinal)
-            || normalized.Contains("move sequence", StringComparison.Ordinal)
-            || normalized.Contains("full-turn", StringComparison.Ordinal)
-            || normalized.Contains("complete turn", StringComparison.Ordinal))
-        {
-            return "engine.move-sequences";
         }
 
         if (normalized.Contains("game state snapshot", StringComparison.Ordinal)
