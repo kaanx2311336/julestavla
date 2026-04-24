@@ -1,0 +1,14 @@
+2026-04-25 - Jules inactive awaiting detection duzeltmesi
+
+Sorun:
+- Jules CLI bazi takilan session'larda status sutununu bos donduruyordu.
+- OpenRouter raporu "awaiting user feedback" dese bile otomasyon katmani sadece CLI status metninde Awaiting/User Feedback aradigi icin ayni session'a cevap gondermiyordu.
+- Bu nedenle `4480456331328959571` gibi inaktif session'lar dashboard'da bekliyor gorunuyor, Jules web ekraninda ise "chat to resume" halinde kaliyordu.
+
+Yapilan:
+- `TavlaAgentService` artik status bos olsa da satir tamamlanmis/aktif degilse, aciklama bir netlestirme istegi gibi gorunuyorsa veya session eski/inaktifse bunu `Awaiting Input` olarak ele aliyor.
+- Tespit edilen session'a `JulesCliService.ReplyToSessionAsync` ile mevcut GameEngine metot listesi ayni Jules session'i icinde gonderiliyor.
+- Canli testte `4480456331328959571` icin feedback basariyla gonderildi ve CLI durumu bos/inaktif yerine `Planning` oldu.
+
+Dogrulama:
+- `dotnet build .\TavlaJules.sln -c Release` basarili.

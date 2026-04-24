@@ -14,6 +14,7 @@
 - Her turdan sonra `AgentDashboardExporter` ile `ajanizleme/data/dashboard.json` ve `dashboard-data.js` dosyalarini gunceller.
 - `AllowAutoJulesSessions` true ise ve model de onay verirse yeni Jules session baslatabilir; varsayilan guvenli davranis yalnizca onermektir.
 - `jules remote list --session` ciktisinda `Awaiting User Feedback/Input` yakalanirsa bunu normal Planning degil, Jules'in soru sordugu durum olarak ayri raporlar.
+- 2026-04-25 duzeltmesiyle Jules CLI status sutunu bos gelse bile satir eski/inaktif gorunuyor veya aciklama "please provide/exact method/clarification" gibi kullanici cevabi istiyorsa `Awaiting Input` kabul edilir.
 - `AutoReplyAwaitingInputSessions` true ise repo icindeki `Awaiting User Feedback` sessionlarina `JulesCliService.ReplyToSessionAsync` ile net GameEngine metot cevabi gonderir.
 - Jules `Awaiting Plan Approval` durumuna gecer ise ayni interact akisiyle plan onayi gonderir ve session `In Progress` olana kadar takip eder.
 - Ayni session'a ayni cevabin dakika basi tekrar gitmemesi icin `RepliedAwaitingInputSessionIds` ve `ApprovedAwaitingPlanSessionIds` kullanilir.

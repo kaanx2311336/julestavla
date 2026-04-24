@@ -253,7 +253,7 @@ public sealed class TavlaAgentService
                 ? ""
                 : BuildAwaitingInputRecoveryPrompt(settings, trackedSessionId, sessionsOutput);
             automation.Summary = automation.AwaitingInputRecoverySession
-                ? "Izlenen Jules kurtarma session'i de kullanici girdisi bekliyor; CLI reply destegi olmadigi icin yeni kopya acilmayacak."
+                ? "Izlenen Jules kurtarma session'i de kullanici girdisi bekliyor; ayni session icinde otomatik cevap denenecek."
                 : automation.AwaitingInputAlreadyHandled
                     ? "Izlenen Jules session kullanici girdisi bekliyor; bu session icin kurtarma gorevi daha once acildi."
                     : "Izlenen Jules session kullanici girdisi bekliyor; CLI reply destegi olmadigi icin netlestirilmis yeni Jules gorevi hazirlandi.";
@@ -380,6 +380,12 @@ public sealed class TavlaAgentService
     {
         automation.AwaitingInputSessionIds = FindAwaitingInputSessionIds(sessionsOutput).ToList();
         automation.AwaitingPlanSessionIds = FindAwaitingPlanSessionIds(sessionsOutput).ToList();
+        if (!string.IsNullOrWhiteSpace(settings.TrackedJulesSessionId)
+            && automation.AwaitingInputSessionIds.Contains(settings.TrackedJulesSessionId, StringComparer.Ordinal))
+        {
+            automation.TrackedSessionAwaitingInput = true;
+        }
+
         if (automation.AwaitingInputSessionIds.Count == 0 && automation.AwaitingPlanSessionIds.Count == 0)
         {
             return;
@@ -633,10 +639,8 @@ public sealed class TavlaAgentService
             return false;
         }
 
-        return Regex.IsMatch(
-            sessionsOutput,
-            Regex.Escape(trackedSessionId) + @".*(Awaiting\s+User|Awaiting\s+.*Feedback|User\s+Feedback|Needs\s+input|Waiting\s+for\s+.*input|Awaiting\s+Plan|Plan\s+Approval|Awaiting\s+.*Approval)",
-            RegexOptions.IgnoreCase);
+        var line = FindSessionLine(sessionsOutput, trackedSessionId);
+        return !string.IsNullOrWhiteSpace(line) && IsAwaitingInputSessionLine(line);
     }
 
     private static bool IsLikelyAwaitingInputRecoverySession(string sessionsOutput, string trackedSessionId)
@@ -650,10 +654,96 @@ public sealed class TavlaAgentService
     {
         return sessionsOutput
             .Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries)
-            .Select(line => Regex.Match(line, @"^\s*(?<id>\d{10,}).*(Awaiting\s+User|Awaiting\s+.*Feedback|User\s+Feedback|Needs\s+input|Waiting\s+for\s+.*input)", RegexOptions.IgnoreCase))
-            .Where(match => match.Success)
-            .Select(match => match.Groups["id"].Value)
+            .Select(line => new
+            {
+                Line = line,
+                Match = Regex.Match(line, @"^\s*(?<id>\d{10,})", RegexOptions.IgnoreCase)
+            })
+            .Where(item => item.Match.Success && IsAwaitingInputSessionLine(item.Line))
+            .Select(item => item.Match.Groups["id"].Value)
             .Distinct(StringComparer.Ordinal);
+    }
+
+    private static string FindSessionLine(string sessionsOutput, string sessionId)
+    {
+        return sessionsOutput
+            .Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(item => item.Contains(sessionId, StringComparison.Ordinal))
+            ?? "";
+    }
+
+    private static bool IsAwaitingInputSessionLine(string line)
+    {
+        if (Regex.IsMatch(
+                line,
+                @"(Awaiting\s+User|Awaiting\s+.*Feedback|User\s+Feedback|Needs\s+input|Waiting\s+for\s+.*input|Awaiting\s+Plan|Plan\s+Approval|Awaiting\s+.*Approval)",
+                RegexOptions.IgnoreCase))
+        {
+            return true;
+        }
+
+        if (Regex.IsMatch(line, @"\b(Completed|Needs\s+review|In\s+Progress|Planning)\b", RegexOptions.IgnoreCase))
+        {
+            return false;
+        }
+
+        var description = NormalizeSessionDescription(ExtractSessionDescriptionFromLine(line));
+        if (LooksLikeClarificationRequest(description))
+        {
+            return true;
+        }
+
+        return IsStaleInactiveSessionLine(line);
+    }
+
+    private static string ExtractSessionDescriptionFromLine(string line)
+    {
+        var match = Regex.Match(line, @"^\s*\d{10,}\s+(?<description>.*?)\s+[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", RegexOptions.IgnoreCase);
+        return match.Success ? match.Groups["description"].Value : line;
+    }
+
+    private static bool LooksLikeClarificationRequest(string description)
+    {
+        return description.Contains("please provide", StringComparison.Ordinal)
+            || description.Contains("exact method", StringComparison.Ordinal)
+            || description.Contains("method specification", StringComparison.Ordinal)
+            || description.Contains("what should i add", StringComparison.Ordinal)
+            || description.Contains("could you please provide", StringComparison.Ordinal)
+            || description.Contains("needs detailed requirements", StringComparison.Ordinal)
+            || description.Contains("user feedback", StringComparison.Ordinal)
+            || description.Contains("clarification", StringComparison.Ordinal);
+    }
+
+    private static bool IsStaleInactiveSessionLine(string line)
+    {
+        if (!TryParseLastActiveAge(line, out var age))
+        {
+            return false;
+        }
+
+        return age >= TimeSpan.FromMinutes(5);
+    }
+
+    private static bool TryParseLastActiveAge(string line, out TimeSpan age)
+    {
+        age = TimeSpan.Zero;
+        var match = Regex.Match(line, @"(?<age>(?:(?<days>\d+)d)?(?:(?<hours>\d+)h)?(?:(?<minutes>\d+)m)?(?:(?<seconds>\d+)s)?)\s+ago", RegexOptions.IgnoreCase);
+        if (!match.Success || string.IsNullOrWhiteSpace(match.Groups["age"].Value))
+        {
+            return false;
+        }
+
+        var days = ParseInt(match.Groups["days"].Value);
+        var hours = ParseInt(match.Groups["hours"].Value);
+        var minutes = ParseInt(match.Groups["minutes"].Value);
+        var seconds = ParseInt(match.Groups["seconds"].Value);
+        age = new TimeSpan(days, hours, minutes, seconds);
+        return age > TimeSpan.Zero;
+    }
+
+    private static int ParseInt(string value)
+    {
+        return int.TryParse(value, out var result) ? result : 0;
     }
 
     private static IEnumerable<string> FindAwaitingPlanSessionIds(string sessionsOutput)
