@@ -1,0 +1,4 @@
+Tarih: 2026-04-25
+GameEngine sinifina CaptureGameStateSnapshot isminde ornek (instance) metodu eklendi.
+GameStateRepository icindeki ::jsonb cast ifadeleri kaldirildi (MySQL uyumu icin).
+Testler kosuldu ve basariyla tamamlandi.

@@ -404,22 +404,27 @@ public class GameEngine
         return true;
     }
 
-    public static GameStateSnapshot CaptureGameStateSnapshot(GameEngine engine)
+    public GameStateSnapshot CaptureGameStateSnapshot()
     {
-        var points = engine.Board.Points
+        var points = Board.Points
             .Where(p => p != null && p.Index >= 1 && p.Index <= 24)
             .Select(p => new PointSnapshot(p.Index, p.Color, p.CheckerCount))
             .ToList();
 
         return new GameStateSnapshot(
             points.AsReadOnly(),
-            engine.Board.WhiteCheckersOnBar,
-            engine.Board.BlackCheckersOnBar,
-            engine.Board.WhiteCheckersBorneOff,
-            engine.Board.BlackCheckersBorneOff,
-            engine.CurrentTurn,
-            engine.RemainingDice.ToList().AsReadOnly(),
-            engine.TurnNumber
+            Board.WhiteCheckersOnBar,
+            Board.BlackCheckersOnBar,
+            Board.WhiteCheckersBorneOff,
+            Board.BlackCheckersBorneOff,
+            CurrentTurn,
+            RemainingDice.ToList().AsReadOnly(),
+            TurnNumber
         );
+    }
+
+    public static GameStateSnapshot CaptureGameStateSnapshot(GameEngine engine)
+    {
+        return engine.CaptureGameStateSnapshot();
     }
 }

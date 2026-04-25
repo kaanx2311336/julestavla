@@ -31,13 +31,13 @@ public class GameStateRepository
                 turn_number,
                 created_at
             ) VALUES (
-                @board_layout::jsonb,
+                @board_layout,
                 @white_checkers_on_bar,
                 @black_checkers_on_bar,
                 @white_checkers_borne_off,
                 @black_checkers_borne_off,
                 @current_turn,
-                @remaining_dice::jsonb,
+                @remaining_dice,
                 @turn_number,
                 @created_at
             );";
