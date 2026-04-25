@@ -406,16 +406,6 @@ public sealed class TavlaAgentService
             return automation;
         }
 
-        if (TryFindDuplicateCompletedSession(settings, sessionsOutput, trackedSessionId, out var duplicateOfSessionId))
-        {
-            automation.AlreadyApplied = true;
-            automation.DuplicateCompletedSession = true;
-            automation.DuplicateOfSessionId = duplicateOfSessionId;
-            automation.Summary = $"Completed Jules session daha once islenen {duplicateOfSessionId} ile ayni gorunuyor; tekrar apply edilmeyecek.";
-            events.Add(CreateEvent("duplicate_completed_session_skipped", "warning", "Ayni prompttan gelen completed Jules session tekrar apply edilmeyecek.", new { trackedSessionId, duplicateOfSessionId }));
-            return automation;
-        }
-
         if (!settings.AutoApplyCompletedSessionPatch)
         {
             automation.JulesPullResult = await julesCliService.PullSessionAsync(settings, trackedSessionId, apply: false, cancellationToken);
@@ -434,6 +424,31 @@ public sealed class TavlaAgentService
         }
 
         automation.JulesPullResult = await julesCliService.PullSessionAsync(settings, trackedSessionId, apply: false, cancellationToken);
+        var hasPreviewDiff = HasJulesPatchDiff(automation.JulesPullResult);
+        if (TryFindDuplicateCompletedSession(settings, sessionsOutput, trackedSessionId, out var duplicateOfSessionId))
+        {
+            var duplicateWasApplied = agentStateService.HasAppliedCompletedSession(settings, duplicateOfSessionId);
+            automation.DuplicateOfSessionId = duplicateOfSessionId;
+            if (!hasPreviewDiff || duplicateWasApplied)
+            {
+                automation.AlreadyApplied = true;
+                automation.DuplicateCompletedSession = true;
+                automation.Summary = $"Completed Jules session daha once islenen {duplicateOfSessionId} ile ayni gorunuyor; tekrar apply edilmeyecek.";
+                events.Add(CreateEvent(
+                    "duplicate_completed_session_skipped",
+                    "warning",
+                    "Ayni prompttan gelen completed Jules session tekrar apply edilmeyecek.",
+                    new { trackedSessionId, duplicateOfSessionId, duplicateWasApplied, hasPreviewDiff }));
+                return automation;
+            }
+
+            events.Add(CreateEvent(
+                "duplicate_completed_session_has_patch",
+                "warning",
+                "Completed session duplicate gorunuyor ama onceki eslesen session apply edilmemis ve yeni patch diff'i var; apply akisi devam edecek.",
+                new { trackedSessionId, duplicateOfSessionId, hasPreviewDiff }));
+        }
+
         if (automation.JulesPullResult.IsSuccess
             && IsCompletedPatchWrongTarget(completedObjectiveKey, automation.JulesPullResult.Output))
         {
@@ -489,7 +504,6 @@ public sealed class TavlaAgentService
                 events.Add(CreateEvent("auto_apply_blocked_dirty_workspace", "warning", "Calisma alani temiz degil; otomatik apply durduruldu.", new { trackedSessionId, status = Trim(automation.GitStatusBeforeApply.Output + automation.GitStatusBeforeApply.Error, 1200) }));
             }
 
-            automation.AutomationBlocked = true;
             return automation;
         }
 
@@ -1584,6 +1598,12 @@ public sealed class TavlaAgentService
             .Where(file => !string.IsNullOrWhiteSpace(file))
             .Distinct(StringComparer.Ordinal)
             .ToList();
+    }
+
+    private static bool HasJulesPatchDiff(CommandResult result)
+    {
+        return result.IsSuccess
+            && Regex.IsMatch(result.Output, @"^diff --git ", RegexOptions.Multiline);
     }
 
     private static bool SessionsContainObjective(string sessionsOutput, string objectiveKey)

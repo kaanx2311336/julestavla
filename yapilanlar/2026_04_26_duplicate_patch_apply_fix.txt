@@ -1,0 +1,17 @@
+2026-04-26 - Duplicate gorunen completed session patch apply duzeltmesi
+
+Sorun:
+- Jules session 5746329528804288398 completed/ready-for-review durumundaydi ve gercek MySQL persistence diff'i tasiyordu.
+- Ajan, bu session aciklamasini onceki 2887011933552899147 session'iyle benzer gordugu icin `jules remote pull --apply` adimina hic gecmeden duplicate sayip duruyordu.
+- Bu durum tam otonom donguyu "shouldStartNewJulesSession=true" raporu uretmesine ragmen ilerletmiyordu.
+
+Yapilan:
+- Duplicate completed session kontrolu, `jules remote pull --session <id>` on izlemesinden sonraya tasindi.
+- Pull on izlemesinde `diff --git` varsa ve eslesen eski session apply edilmemisse duplicate kararina ragmen apply/build/test/commit akisi devam edecek.
+- Eger eslesen eski session zaten apply edilmisse veya yeni session diff tasimiyorsa duplicate korumasi yine devrede kalacak.
+- Dirty workspace recovery basarili olunca metod sonunda tekrar `AutomationBlocked=true` yazan akis duzeltildi.
+
+Beklenen etki:
+- Jules'in "Ready for review" durumunda urettigi patch, benzer baslik veya kurtarma session'i nedeniyle kacirilmayacak.
+- Ajan once patch var mi diye bakacak, sonra duplicate kararini verecek.
+- Tam otonom akis apply -> build/test -> secret scan -> commit/push siralamasina geri donecek.
