@@ -1,0 +1,2 @@
+Added `LoadSnapshotAsync` to `GameStateRepository` to load game snapshots by ID.
+Wrote unit tests in `GameStateRepositoryTests.cs` to ensure proper result mapping from the database back to `GameStateSnapshot`.
