@@ -15,7 +15,7 @@
 - `Completed patch'i uygula ve dogrula` secenegi, completed Jules patch'ini otomatik apply edip build/test dogrulamasi yaptirir.
 - `Dogrulanan degisiklikleri commit/push yap` secenegi, dogrulanmis patch'i secret scan sonrasinda GitHub'a gonderen tam otonom modu kontrol eder.
 - `Ajan baslat`, her 60 saniyede `TavlaAgentService` uzerinden Jules durumunu kontrol eder ve OpenRouter ajan raporu uretir.
-- `AutoStartAgent` ayari true ise pencere acildiktan sonra `Ajan baslat` otomatik tetiklenir; boylece publish EXE yeniden acildiginda dakikalik takip tekrar baslar.
+- `AutoStartAgent` ayari true ise `OnShown` asamasinda, pencere handle'i olustuktan sonra `Ajan baslat` otomatik tetiklenir; boylece publish EXE yeniden acildiginda dakikalik takip tekrar baslar.
 - `Ajan tek tur`, dakika beklemeden tek izleme/analiz turu calistirir.
 - `DB test`, `.env` icindeki `AJANLARIM_MYSQL` ile Aiven baglantisini test eder.
 - Ajan tek tur tamamlandiginda UI gunlugune SQL rapor yazma sonucunu da basar.
