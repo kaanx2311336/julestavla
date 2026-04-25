@@ -10,6 +10,7 @@
 - `AwaitingPlanApprovalSentAt` ve `AwaitingPlanApprovalAttemptCounts`, plan onayi gonderildigi halde Jules hala bekliyorsa kontrollu retry icin son gonderim zamani ve deneme sayisini tutar.
 - `SentPromptHashes`, Jules'e daha once gonderilen promptlarin hash'lerini saklar ve ayni promptun tekrar session acmasini engeller.
 - `SentPromptObjectiveKeys`, ayni hedefin farkli cumlelerle tekrar Jules'e gitmesini engeller. Ornek: `engine.generate-legal-moves-explicit-dice`.
+- `SessionObjectiveKeys`, ayni Jules session altinda devam edilen islerde session id -> aktif hedef anahtari eslemesini tutar.
 - `PendingAppliedSessionId`, apply edilmis ama commit/push akisi tamamlanmadan kirli kalmis workspace'i sonraki turda toparlamak icin kullanilir.
 - `GetLastPromptSessionId`, tekrar algisinda son acilan Jules session id'sini bulmak icin kullanilir.
 - `MarkAwaitingInputSessionHandled`, input bekleyen session'i ele alinmis sayar ve yeni takip id'sini kaydeder.
@@ -18,6 +19,7 @@
 - `MarkAwaitingPlanSessionApproved`, Jules plan onayi basarili gonderildiginde session id'sini kaydeder.
 - `ShouldRetryAwaitingPlanApproval`, daha once onaylanan ama hala Awaiting Plan Approval gorunen session icin retry araligi ve maksimum deneme sayisini kontrol eder.
 - `MarkCompletedSessionHandled`, completed session'i isaretler ve okunabilirse yeni takip id'sini `LastTrackedSessionId` alanina yazar.
+- `MarkCompletedSessionContinuedInPlace`, baglantili prompt ayni completed session altina yazildiginda eski handled/applied kaydini temizler ve ayni session'i tekrar izlenebilir hale getirir.
 - `MarkCompletedSessionApplied`, completed session patch'inin tekrar uygulanmasini engellemek icin session id'yi apply listesine ekler.
 - `MarkPromptSent`, yeni Jules session basarili acildiginda prompt hash'ini kaydeder.
 - `ParseSessionId`, `jules new` ciktisindaki `ID: ...` satirindan yeni Jules session id'sini okur.

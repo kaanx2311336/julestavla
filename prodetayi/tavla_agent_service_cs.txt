@@ -42,3 +42,5 @@
 - 2026-04-25 retry duzeltmesiyle `Awaiting Plan Approval` icin onay daha once gonderilmis olsa bile session hala bekliyorsa 10 dakikalik aralikla en fazla 3 kez tekrar denenir.
 - `Awaiting Plan Approval` durumundaki izlenen session'in hedefi lokal kodda zaten uygulanmis gorunurse ajan bunu no-op completed kabul eder; ayni promptu tekrar Jules'e gondermez ve paneli bekleme modunda dondurmaz.
 - `exact method signature` ve `CaptureGameStateSnapshot` ifadeleri `engine.game-state-snapshot` hedefi olarak siniflandirilir; kisaltilmis Jules satirlarinda snapshot tekrar promptlari azaltilir.
+- 2026-04-25 continuation routing ile completed Jules session sonrasi nextPrompt ayni engine zincirine bagliysa `ReplyToSessionAsync` ile mevcut session'in altina yazilir; DB/UI/dashboard gibi ayri yuzeylere geciyorsa yeni Jules session acilir.
+- Ayni session altinda devam edilirse state icindeki eski completed/applied kaydi temizlenir ve session-objective map guncellenir; boylece ayni session yeni is tamamladiginda tekrar apply/dogrulama akisi bloke olmaz.

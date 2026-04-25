@@ -16,6 +16,9 @@ public sealed class AgentAutomationArtifacts
     public bool AwaitingPlanApprovalAlreadySent { get; set; }
     public bool AwaitingPlanApprovalRetryDue { get; set; }
     public bool TrackedSessionAwaitingPlanApproval { get; set; }
+    public bool CompletedSessionContinuedInPlace { get; set; }
+    public bool CompletedSessionOpenedNewSession { get; set; }
+    public bool CompletedContinuationRelated { get; set; }
     public bool AutomationBlocked { get; set; }
     public string Summary { get; set; } = "";
     public string DuplicateOfSessionId { get; set; } = "";
@@ -29,6 +32,7 @@ public sealed class AgentAutomationArtifacts
     public CommandResult? GitStatusBeforeApply { get; set; }
     public CommandResult? JulesPullResult { get; set; }
     public CommandResult? JulesApplyResult { get; set; }
+    public CommandResult? CompletedContinuationResult { get; set; }
     public CommandResult? VerificationBuildResult { get; set; }
     public CommandResult? VerificationTestResult { get; set; }
     public CommandResult? GitStageResult { get; set; }

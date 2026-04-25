@@ -1,0 +1,17 @@
+2026-04-25 Completed Jules continuation routing
+
+Istek:
+- Jules session bittiginde yeni uretilen prompt mevcut isin devamiyla baglantiliysa completed yazisinin altina yazilsin.
+- Yeni prompt cok baglantili degilse yeni Jules session acilsin.
+
+Yapilan:
+- `TavlaAgentService`, completed session sonrasi `completedObjectiveKey` ve `nextPrompt` hedefini karsilastirir.
+- Ayni engine zincirindeki promptlar (`engine.*` ve sadece `TavlaJules.Engine` yuzeyi) `ReplyToSessionAsync` ile ayni Jules session'a devam mesaji olarak yazilir.
+- DB, SQL, dashboard, WinForms/App gibi ayri yuzeylere gecen promptlar icin eski davranis korunur ve yeni Jules session acilir.
+- Ayni session altinda devam edildiginde `AgentStateService` eski handled/applied kaydini temizler ve aktif hedefi `SessionObjectiveKeys` ile ayni session id'ye baglar.
+- JSON/SQL/dashboard raporlarinda hangi yolun secildigi gorunmesi icin yeni automation bayraklari eklendi.
+
+Dogrulama:
+- `dotnet build TavlaJules.sln` basarili.
+- `dotnet test TavlaJules.sln` basarili: 39/39 test gecti.
+- `dotnet publish src/TavlaJules.App/TavlaJules.App.csproj -c Release -r win-x64 --self-contained false -o publish` basarili.

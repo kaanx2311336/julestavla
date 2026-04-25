@@ -114,6 +114,17 @@ public sealed class AgentStateService
         return state.SentPromptObjectiveKeys.Contains(objectiveKey, StringComparer.Ordinal);
     }
 
+    public string GetSessionObjectiveKey(ProjectSettings settings, string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return "";
+        }
+
+        var state = Load(settings);
+        return state.SessionObjectiveKeys.TryGetValue(sessionId, out var objectiveKey) ? objectiveKey : "";
+    }
+
     public void MarkPromptSent(ProjectSettings settings, string prompt, string sessionId, string objectiveKey = "")
     {
         var state = Load(settings);
@@ -128,6 +139,11 @@ public sealed class AgentStateService
             && !state.SentPromptObjectiveKeys.Contains(objectiveKey, StringComparer.Ordinal))
         {
             state.SentPromptObjectiveKeys.Add(objectiveKey);
+        }
+
+        if (!string.IsNullOrWhiteSpace(sessionId) && !string.IsNullOrWhiteSpace(objectiveKey))
+        {
+            state.SessionObjectiveKeys[sessionId] = objectiveKey;
         }
 
         state.LastPromptSessionId = sessionId;
@@ -224,6 +240,28 @@ public sealed class AgentStateService
         Save(settings, state);
     }
 
+    public void MarkCompletedSessionContinuedInPlace(ProjectSettings settings, string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        var state = Load(settings);
+        state.HandledCompletedSessionIds.RemoveAll(item => item.Equals(sessionId, StringComparison.Ordinal));
+        state.AppliedCompletedSessionIds.RemoveAll(item => item.Equals(sessionId, StringComparison.Ordinal));
+
+        if (state.PendingAppliedSessionId.Equals(sessionId, StringComparison.Ordinal))
+        {
+            state.PendingAppliedSessionId = "";
+        }
+
+        state.LastTrackedSessionId = sessionId;
+        state.LastPromptSessionId = sessionId;
+        state.UpdatedAt = DateTimeOffset.Now;
+        Save(settings, state);
+    }
+
     public void MarkCompletedSessionApplied(ProjectSettings settings, string sessionId)
     {
         var state = Load(settings);
@@ -309,6 +347,7 @@ public sealed class AgentStateService
         public List<string> ApprovedAwaitingPlanSessionIds { get; set; } = [];
         public Dictionary<string, DateTimeOffset> AwaitingPlanApprovalSentAt { get; set; } = [];
         public Dictionary<string, int> AwaitingPlanApprovalAttemptCounts { get; set; } = [];
+        public Dictionary<string, string> SessionObjectiveKeys { get; set; } = [];
         public List<string> SentPromptHashes { get; set; } = [];
         public List<string> SentPromptObjectiveKeys { get; set; } = [];
     }

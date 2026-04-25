@@ -98,9 +98,16 @@ public sealed class TavlaAgentService
                 && !automation.AwaitingInputReplySent
                 && !automation.AutomationBlocked
                 && !string.IsNullOrWhiteSpace(automation.AwaitingInputRecoveryPrompt);
+            var completedObjectiveKeyAtStart = automation.TrackedSessionCompleted
+                ? ResolveSessionObjectiveKey(settings, relevantSessionsOutput, trackedSessionIdAtStart)
+                : "";
             var promptToSend = shouldRecoverAwaitingInputSession ? automation.AwaitingInputRecoveryPrompt : nextPrompt;
             var promptObjectiveKey = BuildPromptObjectiveKey(promptToSend);
             var trackedSessionBusy = IsTrackedSessionBusy(relevantSessionsOutput, trackedSessionIdAtStart, automation);
+            var shouldContinueCompletedInPlace =
+                !shouldRecoverAwaitingInputSession
+                && (shouldContinueCompletedSession || shouldStartNextImplementedPhase)
+                && ShouldContinueCompletedSessionInPlace(completedObjectiveKeyAtStart, promptObjectiveKey, promptToSend);
             CommandResult? autoResult = null;
             var newJulesSessionId = "";
 
@@ -139,8 +146,17 @@ public sealed class TavlaAgentService
                 }
                 else
                 {
-                    autoResult = await julesCliService.CreateSessionAsync(settings, promptToSend, cancellationToken);
-                    newJulesSessionId = AgentStateService.ParseSessionId(autoResult);
+                    if (shouldContinueCompletedInPlace)
+                    {
+                        autoResult = await julesCliService.ReplyToSessionAsync(settings, trackedSessionIdAtStart, BuildCompletedSessionContinuationPrompt(promptToSend), cancellationToken);
+                        automation.CompletedContinuationResult = autoResult;
+                        newJulesSessionId = autoResult.IsSuccess ? trackedSessionIdAtStart : "";
+                    }
+                    else
+                    {
+                        autoResult = await julesCliService.CreateSessionAsync(settings, promptToSend, cancellationToken);
+                        newJulesSessionId = AgentStateService.ParseSessionId(autoResult);
+                    }
 
                     if (autoResult.IsSuccess)
                     {
@@ -161,7 +177,17 @@ public sealed class TavlaAgentService
 
                     if (autoResult.IsSuccess && shouldContinueCompletedSession)
                     {
-                        agentStateService.MarkCompletedSessionHandled(settings, trackedSessionIdAtStart, newJulesSessionId);
+                        if (shouldContinueCompletedInPlace)
+                        {
+                            automation.CompletedSessionContinuedInPlace = true;
+                            automation.CompletedContinuationRelated = true;
+                            agentStateService.MarkCompletedSessionContinuedInPlace(settings, trackedSessionIdAtStart);
+                        }
+                        else
+                        {
+                            automation.CompletedSessionOpenedNewSession = true;
+                            agentStateService.MarkCompletedSessionHandled(settings, trackedSessionIdAtStart, newJulesSessionId);
+                        }
 
                         if (!string.IsNullOrWhiteSpace(newJulesSessionId))
                         {
@@ -171,7 +197,17 @@ public sealed class TavlaAgentService
 
                     if (autoResult.IsSuccess && shouldStartNextImplementedPhase)
                     {
-                        agentStateService.MarkCompletedSessionHandled(settings, trackedSessionIdAtStart, newJulesSessionId);
+                        if (shouldContinueCompletedInPlace)
+                        {
+                            automation.CompletedSessionContinuedInPlace = true;
+                            automation.CompletedContinuationRelated = true;
+                            agentStateService.MarkCompletedSessionContinuedInPlace(settings, trackedSessionIdAtStart);
+                        }
+                        else
+                        {
+                            automation.CompletedSessionOpenedNewSession = true;
+                            agentStateService.MarkCompletedSessionHandled(settings, trackedSessionIdAtStart, newJulesSessionId);
+                        }
 
                         if (!string.IsNullOrWhiteSpace(newJulesSessionId))
                         {
@@ -180,10 +216,23 @@ public sealed class TavlaAgentService
                     }
 
                     events.Add(CreateEvent(
-                        "auto_jules_session_created",
+                        shouldContinueCompletedInPlace ? "completed_jules_session_continued_in_place" : "auto_jules_session_created",
                         autoResult.IsSuccess ? "info" : "error",
-                        "Ajan otomatik Jules session denemesi yapti.",
-                        new { autoResult.ExitCode, continuedFromSessionId = trackedSessionIdAtStart, newJulesSessionId, shouldContinueCompletedSession, shouldRecoverAwaitingInputSession, shouldStartNextImplementedPhase }));
+                        shouldContinueCompletedInPlace
+                            ? "Ajan baglantili promptu completed Jules session'in altina yazdi."
+                            : "Ajan otomatik yeni Jules session denemesi yapti.",
+                        new
+                        {
+                            autoResult.ExitCode,
+                            continuedFromSessionId = trackedSessionIdAtStart,
+                            newJulesSessionId,
+                            completedObjectiveKeyAtStart,
+                            promptObjectiveKey,
+                            shouldContinueCompletedSession,
+                            shouldRecoverAwaitingInputSession,
+                            shouldStartNextImplementedPhase,
+                            shouldContinueCompletedInPlace
+                        }));
                 }
             }
             else if (automation.TrackedSessionAwaitingInput)
@@ -319,7 +368,7 @@ public sealed class TavlaAgentService
             return automation;
         }
 
-        var trackedObjectiveKey = BuildPromptObjectiveKey(TryGetSessionDescription(sessionsOutput, trackedSessionId));
+        var trackedObjectiveKey = ResolveSessionObjectiveKey(settings, sessionsOutput, trackedSessionId);
         if (automation.TrackedSessionAwaitingPlanApproval
             && IsPromptObjectiveImplemented(settings.ProjectFolder, trackedObjectiveKey))
         {
@@ -1094,6 +1143,14 @@ public sealed class TavlaAgentService
         """;
     }
 
+    private string ResolveSessionObjectiveKey(ProjectSettings settings, string sessionsOutput, string sessionId)
+    {
+        var stateObjectiveKey = agentStateService.GetSessionObjectiveKey(settings, sessionId);
+        return !string.IsNullOrWhiteSpace(stateObjectiveKey)
+            ? stateObjectiveKey
+            : BuildPromptObjectiveKey(TryGetSessionDescription(sessionsOutput, sessionId));
+    }
+
     private static string SelectNextPrompt(
         ProjectSettings settings,
         string proposedPrompt,
@@ -1311,6 +1368,63 @@ public sealed class TavlaAgentService
 
         return left.StartsWith("engine.generate-legal-moves", StringComparison.Ordinal)
             && right.StartsWith("engine.generate-legal-moves", StringComparison.Ordinal);
+    }
+
+    private static bool ShouldContinueCompletedSessionInPlace(string completedObjectiveKey, string nextObjectiveKey, string prompt)
+    {
+        if (string.IsNullOrWhiteSpace(completedObjectiveKey)
+            || string.IsNullOrWhiteSpace(nextObjectiveKey))
+        {
+            return false;
+        }
+
+        if (ObjectiveKeysMatch(completedObjectiveKey, nextObjectiveKey))
+        {
+            return true;
+        }
+
+        if (completedObjectiveKey.StartsWith("engine.", StringComparison.Ordinal)
+            && nextObjectiveKey.StartsWith("engine.", StringComparison.Ordinal)
+            && PromptTargetsEngineOnly(prompt))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool PromptTargetsEngineOnly(string prompt)
+    {
+        var normalized = NormalizeSessionDescription(prompt);
+        var mentionsEngine = normalized.Contains("tavlajules.engine", StringComparison.Ordinal)
+            || normalized.Contains("gameengine", StringComparison.Ordinal)
+            || normalized.Contains("movevalidator", StringComparison.Ordinal)
+            || normalized.Contains("movesequence", StringComparison.Ordinal)
+            || normalized.Contains("game state snapshot", StringComparison.Ordinal)
+            || normalized.Contains("src/tavlajules.engine", StringComparison.Ordinal);
+
+        var mentionsSeparateSurface = normalized.Contains("winforms", StringComparison.Ordinal)
+            || normalized.Contains("tavlajules.app", StringComparison.Ordinal)
+            || normalized.Contains("database", StringComparison.Ordinal)
+            || normalized.Contains("mysql", StringComparison.Ordinal)
+            || normalized.Contains("sql", StringComparison.Ordinal)
+            || normalized.Contains("dashboard", StringComparison.Ordinal)
+            || normalized.Contains("ajanlarim", StringComparison.Ordinal)
+            || normalized.Contains("tavla_online", StringComparison.Ordinal);
+
+        return mentionsEngine && !mentionsSeparateSurface;
+    }
+
+    private static string BuildCompletedSessionContinuationPrompt(string prompt)
+    {
+        return $"""
+        Continue from the completed work above in this same Jules session.
+
+        Next connected task:
+        {prompt}
+
+        Keep this continuation tightly related to the files and architecture already discussed in this session. If the task is already implemented, say so clearly and finalize with no code changes. Do not include secrets or `.env` values.
+        """;
     }
 
     private static bool IsTrackedSessionBusy(
@@ -1636,6 +1750,9 @@ public sealed class TavlaAgentService
             $"awaitingPlanApprovalSent={automation.AwaitingPlanApprovalSent}",
             $"awaitingPlanApprovalAlreadySent={automation.AwaitingPlanApprovalAlreadySent}",
             $"awaitingPlanApprovalRetryDue={automation.AwaitingPlanApprovalRetryDue}",
+            $"completedSessionContinuedInPlace={automation.CompletedSessionContinuedInPlace}",
+            $"completedSessionOpenedNewSession={automation.CompletedSessionOpenedNewSession}",
+            $"completedContinuationRelated={automation.CompletedContinuationRelated}",
             $"awaitingInputSessionIds={string.Join(",", automation.AwaitingInputSessionIds)}",
             $"awaitingPlanSessionIds={string.Join(",", automation.AwaitingPlanSessionIds)}",
             $"appliedThisTurn={automation.AppliedThisTurn}",
@@ -1648,6 +1765,7 @@ public sealed class TavlaAgentService
         AddCommandLine(lines, "gitStatusBefore", automation.GitStatusBeforeApply);
         AddCommandLine(lines, "julesPull", automation.JulesPullResult);
         AddCommandLine(lines, "julesApply", automation.JulesApplyResult);
+        AddCommandLine(lines, "completedContinuation", automation.CompletedContinuationResult);
         foreach (var replyResult in automation.AwaitingInputReplyResults)
         {
             AddCommandLine(lines, "julesReply", replyResult);
@@ -1687,6 +1805,16 @@ public sealed class TavlaAgentService
             var commitText = automation.GitCommitResult?.IsSuccess == true ? " commit edildi" : "";
             var pushText = automation.GitPushResult?.IsSuccess == true ? " ve pushlandi" : "";
             return $"Completed Jules patch'i apply edildi, dogrulandi{commitText}{pushText}.";
+        }
+
+        if (automation.CompletedSessionContinuedInPlace)
+        {
+            return "Completed Jules session sonrasi baglantili prompt ayni session'in altina yazildi.";
+        }
+
+        if (automation.CompletedSessionOpenedNewSession)
+        {
+            return "Completed Jules session sonrasi prompt baglantisiz goruldu; yeni Jules session acildi.";
         }
 
         if (automation.AlreadyApplied)
