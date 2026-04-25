@@ -1,0 +1,17 @@
+2026-04-25 Awaiting Plan retry ve no-op tamamlanma duzeltmesi
+
+Sorun:
+- Jules session `16531879307273701753` plan onayi gonderilmis gibi state'e yazilmis olmasina ragmen CLI tarafinda `Awaiting Plan A` kaldi.
+- Ajan bu session'i her dakika "henuz tamamlanmadi" diye raporluyor, OpenRouter da ayni "plan approval confirm" mesajini tekrar uretiyordu.
+- Ekranda Jules aslinda "No code changes / Publish branch" ozetine gelmisken kontrol paneli bunu devam eden is sanip bekliyordu.
+
+Yapilan:
+- Plan onayi gonderimleri artik zaman ve deneme sayisiyla tutuluyor; hala bekliyorsa 10 dakika aralikla en fazla 3 retry deneniyor.
+- Izlenen `Awaiting Plan Approval` session hedefi lokal kodda zaten uygulanmissa no-op completed sayiliyor ve ayni hedef yeniden Jules'e gonderilmiyor.
+- `exact method signature` ve `CaptureGameStateSnapshot` ifadeleri snapshot hedefine map edildi.
+- Jules API reply denemesinde calisan `feedbackGiven.feedback` payload formati ilk siraya alindi.
+
+Dogrulama:
+- `dotnet build TavlaJules.sln` basarili.
+- `dotnet test TavlaJules.sln` basarili: 39/39 test gecti.
+- `dotnet publish src/TavlaJules.App/TavlaJules.App.csproj -c Release -r win-x64 --self-contained false -o publish` basarili.

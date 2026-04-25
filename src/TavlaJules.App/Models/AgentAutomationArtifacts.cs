@@ -13,6 +13,9 @@ public sealed class AgentAutomationArtifacts
     public bool AwaitingInputRecoverySession { get; set; }
     public bool AwaitingInputReplySent { get; set; }
     public bool AwaitingPlanApprovalSent { get; set; }
+    public bool AwaitingPlanApprovalAlreadySent { get; set; }
+    public bool AwaitingPlanApprovalRetryDue { get; set; }
+    public bool TrackedSessionAwaitingPlanApproval { get; set; }
     public bool AutomationBlocked { get; set; }
     public string Summary { get; set; } = "";
     public string DuplicateOfSessionId { get; set; } = "";

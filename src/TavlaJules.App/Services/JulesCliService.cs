@@ -73,18 +73,6 @@ public sealed class JulesCliService
             {
                 new
                 {
-                    name = "freeFormText",
-                    body = (object)new
-                    {
-                        taskId = sessionId,
-                        userActivity = new
-                        {
-                            freeFormText = feedback
-                        }
-                    }
-                },
-                new
-                {
                     name = "feedbackGiven",
                     body = (object)new
                     {
@@ -95,6 +83,18 @@ public sealed class JulesCliService
                             {
                                 feedback
                             }
+                        }
+                    }
+                },
+                new
+                {
+                    name = "freeFormText",
+                    body = (object)new
+                    {
+                        taskId = sessionId,
+                        userActivity = new
+                        {
+                            freeFormText = feedback
                         }
                     }
                 }

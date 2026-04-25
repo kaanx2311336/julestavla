@@ -6,6 +6,9 @@ namespace TavlaJules.App.Services;
 
 public sealed class TavlaAgentService
 {
+    private static readonly TimeSpan AwaitingPlanApprovalRetryAfter = TimeSpan.FromMinutes(10);
+    private const int AwaitingPlanApprovalMaxAttempts = 3;
+
     private readonly JulesCliService julesCliService = new();
     private readonly OpenRouterClient openRouterClient = new();
     private readonly DatabaseHealthService databaseHealthService = new();
@@ -271,7 +274,8 @@ public sealed class TavlaAgentService
         var automation = new AgentAutomationArtifacts
         {
             TrackedSessionCompleted = IsTrackedSessionCompleted(sessionsOutput, trackedSessionId),
-            TrackedSessionAwaitingInput = IsTrackedSessionAwaitingInput(sessionsOutput, trackedSessionId)
+            TrackedSessionAwaitingInput = IsTrackedSessionAwaitingInput(sessionsOutput, trackedSessionId),
+            TrackedSessionAwaitingPlanApproval = IsTrackedSessionAwaitingPlanApproval(sessionsOutput, trackedSessionId)
         };
 
         if (string.IsNullOrWhiteSpace(trackedSessionId))
@@ -315,13 +319,30 @@ public sealed class TavlaAgentService
             return automation;
         }
 
+        var trackedObjectiveKey = BuildPromptObjectiveKey(TryGetSessionDescription(sessionsOutput, trackedSessionId));
+        if (automation.TrackedSessionAwaitingPlanApproval
+            && IsPromptObjectiveImplemented(settings.ProjectFolder, trackedObjectiveKey))
+        {
+            automation.TrackedSessionCompleted = true;
+            automation.AlreadyApplied = true;
+            automation.DuplicateCompletedSession = true;
+            automation.Summary = $"Awaiting Plan Approval session hedefi ({trackedObjectiveKey}) mevcut kodda zaten uygulanmis; no-op Jules session tamam sayildi.";
+            agentStateService.MarkCompletedSessionHandled(settings, trackedSessionId, trackedSessionId);
+            events.Add(CreateEvent(
+                "awaiting_plan_objective_already_implemented",
+                "warning",
+                "Jules plan onayi bekliyor gorunuyor ama hedef lokal kodda zaten var; session no-op tamam kabul edildi.",
+                new { trackedSessionId, trackedObjectiveKey }));
+            return automation;
+        }
+
         if (!automation.TrackedSessionCompleted)
         {
             automation.Summary = "Izlenen Jules session henuz tamamlanmadi; ajan durum raporu uretir ve bekler.";
             return automation;
         }
 
-        var completedObjectiveKey = BuildPromptObjectiveKey(TryGetSessionDescription(sessionsOutput, trackedSessionId));
+        var completedObjectiveKey = trackedObjectiveKey;
         if (IsPromptObjectiveImplemented(settings.ProjectFolder, completedObjectiveKey))
         {
             automation.AlreadyApplied = true;
@@ -445,10 +466,22 @@ public sealed class TavlaAgentService
     {
         automation.AwaitingInputSessionIds = FindAwaitingInputSessionIds(sessionsOutput).ToList();
         automation.AwaitingPlanSessionIds = FindAwaitingPlanSessionIds(sessionsOutput).ToList();
+        if (automation.TrackedSessionCompleted && !string.IsNullOrWhiteSpace(settings.TrackedJulesSessionId))
+        {
+            automation.AwaitingInputSessionIds.RemoveAll(sessionId => sessionId.Equals(settings.TrackedJulesSessionId, StringComparison.Ordinal));
+            automation.AwaitingPlanSessionIds.RemoveAll(sessionId => sessionId.Equals(settings.TrackedJulesSessionId, StringComparison.Ordinal));
+        }
+
         if (!string.IsNullOrWhiteSpace(settings.TrackedJulesSessionId)
             && automation.AwaitingInputSessionIds.Contains(settings.TrackedJulesSessionId, StringComparer.Ordinal))
         {
             automation.TrackedSessionAwaitingInput = true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.TrackedJulesSessionId)
+            && automation.AwaitingPlanSessionIds.Contains(settings.TrackedJulesSessionId, StringComparer.Ordinal))
+        {
+            automation.TrackedSessionAwaitingPlanApproval = true;
         }
 
         if (automation.AwaitingInputSessionIds.Count == 0 && automation.AwaitingPlanSessionIds.Count == 0)
@@ -470,14 +503,42 @@ public sealed class TavlaAgentService
 
         foreach (var sessionId in automation.AwaitingPlanSessionIds.Take(3))
         {
-            if (agentStateService.HasApprovedAwaitingPlanSession(settings, sessionId))
+            var alreadyApproved = agentStateService.HasApprovedAwaitingPlanSession(settings, sessionId);
+            if (alreadyApproved
+                && !agentStateService.ShouldRetryAwaitingPlanApproval(
+                    settings,
+                    sessionId,
+                    AwaitingPlanApprovalRetryAfter,
+                    AwaitingPlanApprovalMaxAttempts))
             {
+                automation.AwaitingPlanApprovalAlreadySent = true;
                 events.Add(CreateEvent(
                     "jules_awaiting_plan_approval_already_sent",
                     "info",
-                    "Bu Awaiting Plan Approval session icin daha once onay gonderildi.",
-                    new { sessionId }));
+                    "Bu Awaiting Plan Approval session icin daha once onay gonderildi; retry araligi veya maksimum deneme siniri nedeniyle tekrar gonderilmedi.",
+                    new
+                    {
+                        sessionId,
+                        attempts = agentStateService.GetAwaitingPlanApprovalAttemptCount(settings, sessionId),
+                        retryAfterMinutes = AwaitingPlanApprovalRetryAfter.TotalMinutes,
+                        maxAttempts = AwaitingPlanApprovalMaxAttempts
+                    }));
                 continue;
+            }
+
+            if (alreadyApproved)
+            {
+                automation.AwaitingPlanApprovalRetryDue = true;
+                events.Add(CreateEvent(
+                    "jules_awaiting_plan_approval_retrying",
+                    "warning",
+                    "Jules hala Awaiting Plan Approval gorundugu icin onay tekrar gonderilecek.",
+                    new
+                    {
+                        sessionId,
+                        attempts = agentStateService.GetAwaitingPlanApprovalAttemptCount(settings, sessionId),
+                        retryAfterMinutes = AwaitingPlanApprovalRetryAfter.TotalMinutes
+                    }));
             }
 
             var result = await julesCliService.ReplyToSessionAsync(settings, sessionId, automation.AwaitingPlanApprovalPrompt, cancellationToken);
@@ -537,7 +598,13 @@ public sealed class TavlaAgentService
 
         if (automation.AwaitingPlanApprovalSent)
         {
-            automation.Summary = "Awaiting Plan Approval durumundaki Jules session'a plan onayi gonderildi; ajan uygulamaya gecmeli.";
+            automation.Summary = automation.AwaitingPlanApprovalRetryDue
+                ? "Awaiting Plan Approval durumundaki Jules session hala bekledigi icin plan onayi tekrar gonderildi."
+                : "Awaiting Plan Approval durumundaki Jules session'a plan onayi gonderildi; ajan uygulamaya gecmeli.";
+        }
+        else if (automation.AwaitingPlanApprovalAlreadySent)
+        {
+            automation.Summary = "Awaiting Plan Approval session'a onay daha once gonderildi; retry araligi veya maksimum deneme siniri bekleniyor.";
         }
     }
 
@@ -711,6 +778,17 @@ public sealed class TavlaAgentService
 
         var line = FindSessionLine(sessionsOutput, trackedSessionId);
         return !string.IsNullOrWhiteSpace(line) && IsAwaitingInputSessionLine(line);
+    }
+
+    private static bool IsTrackedSessionAwaitingPlanApproval(string sessionsOutput, string trackedSessionId)
+    {
+        if (string.IsNullOrWhiteSpace(trackedSessionId))
+        {
+            return false;
+        }
+
+        var line = FindSessionLine(sessionsOutput, trackedSessionId);
+        return !string.IsNullOrWhiteSpace(line) && IsPlanApprovalSessionLine(line);
     }
 
     private static bool IsLikelyAwaitingInputRecoverySession(string sessionsOutput, string trackedSessionId)
@@ -1160,7 +1238,9 @@ public sealed class TavlaAgentService
 
         if (normalized.Contains("game state snapshot", StringComparison.Ordinal)
             || normalized.Contains("serializable game state", StringComparison.Ordinal)
-            || normalized.Contains("snapshot layer", StringComparison.Ordinal))
+            || normalized.Contains("snapshot layer", StringComparison.Ordinal)
+            || normalized.Contains("capturegamestatesnapshot", StringComparison.Ordinal)
+            || normalized.Contains("exact method signature", StringComparison.Ordinal))
         {
             return "engine.game-state-snapshot";
         }
@@ -1548,11 +1628,14 @@ public sealed class TavlaAgentService
         {
             $"trackedCompleted={automation.TrackedSessionCompleted}",
             $"trackedAwaitingInput={automation.TrackedSessionAwaitingInput}",
+            $"trackedAwaitingPlanApproval={automation.TrackedSessionAwaitingPlanApproval}",
             $"awaitingInputAlreadyHandled={automation.AwaitingInputAlreadyHandled}",
             $"awaitingInputRecoveryStarted={automation.AwaitingInputRecoveryStarted}",
             $"awaitingInputRecoverySession={automation.AwaitingInputRecoverySession}",
             $"awaitingInputReplySent={automation.AwaitingInputReplySent}",
             $"awaitingPlanApprovalSent={automation.AwaitingPlanApprovalSent}",
+            $"awaitingPlanApprovalAlreadySent={automation.AwaitingPlanApprovalAlreadySent}",
+            $"awaitingPlanApprovalRetryDue={automation.AwaitingPlanApprovalRetryDue}",
             $"awaitingInputSessionIds={string.Join(",", automation.AwaitingInputSessionIds)}",
             $"awaitingPlanSessionIds={string.Join(",", automation.AwaitingPlanSessionIds)}",
             $"appliedThisTurn={automation.AppliedThisTurn}",

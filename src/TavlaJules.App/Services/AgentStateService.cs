@@ -59,6 +59,34 @@ public sealed class AgentStateService
         return state.ApprovedAwaitingPlanSessionIds.Contains(sessionId, StringComparer.Ordinal);
     }
 
+    public bool ShouldRetryAwaitingPlanApproval(ProjectSettings settings, string sessionId, TimeSpan retryAfter, int maxAttempts)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return false;
+        }
+
+        var state = Load(settings);
+        var attempts = state.AwaitingPlanApprovalAttemptCounts.TryGetValue(sessionId, out var count) ? count : 0;
+        if (attempts >= maxAttempts)
+        {
+            return false;
+        }
+
+        if (!state.AwaitingPlanApprovalSentAt.TryGetValue(sessionId, out var lastSentAt))
+        {
+            return true;
+        }
+
+        return DateTimeOffset.Now - lastSentAt >= retryAfter;
+    }
+
+    public int GetAwaitingPlanApprovalAttemptCount(ProjectSettings settings, string sessionId)
+    {
+        var state = Load(settings);
+        return state.AwaitingPlanApprovalAttemptCounts.TryGetValue(sessionId, out var count) ? count : 0;
+    }
+
     public string GetPendingAppliedSessionId(ProjectSettings settings)
     {
         return Load(settings).PendingAppliedSessionId;
@@ -175,6 +203,9 @@ public sealed class AgentStateService
             state.ApprovedAwaitingPlanSessionIds.Add(sessionId);
         }
 
+        state.AwaitingPlanApprovalSentAt[sessionId] = DateTimeOffset.Now;
+        state.AwaitingPlanApprovalAttemptCounts[sessionId] =
+            state.AwaitingPlanApprovalAttemptCounts.TryGetValue(sessionId, out var count) ? count + 1 : 1;
         state.UpdatedAt = DateTimeOffset.Now;
         Save(settings, state);
     }
@@ -276,6 +307,8 @@ public sealed class AgentStateService
         public List<string> AwaitingInputRecoverySessionIds { get; set; } = [];
         public List<string> RepliedAwaitingInputSessionIds { get; set; } = [];
         public List<string> ApprovedAwaitingPlanSessionIds { get; set; } = [];
+        public Dictionary<string, DateTimeOffset> AwaitingPlanApprovalSentAt { get; set; } = [];
+        public Dictionary<string, int> AwaitingPlanApprovalAttemptCounts { get; set; } = [];
         public List<string> SentPromptHashes { get; set; } = [];
         public List<string> SentPromptObjectiveKeys { get; set; } = [];
     }

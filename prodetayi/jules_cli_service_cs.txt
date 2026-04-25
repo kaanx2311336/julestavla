@@ -5,7 +5,7 @@
 - `ListSessionsAsync`, `jules.cmd remote list --session` ile tum Jules session durumlarini okur.
 - `PullSessionAsync`, `jules.cmd remote pull --session <id>` ile tamamlanan session sonucunu ceker; `apply` true verilirse patch'i uygular.
 - `ReplyToSessionAsync`, Jules CLI'nin Windows Credential Manager'daki `jules-cli:default` OAuth tokenini okuyup AIDA `tasks/{id}:interact` endpointine feedback gonderir.
-- Reply akisi once `freeFormText`, sonra `feedbackGiven.feedback` payload formatini dener; basarili mod `CommandResult` ile raporlanir.
+- Reply akisi once Jules API'de calisan `feedbackGiven.feedback` payload formatini dener, sonra geriye uyumluluk icin `freeFormText` dener; basarili mod `CommandResult` ile raporlanir.
 - Bu sayede `Awaiting User Feedback` ve `Awaiting Plan Approval` durumlari web ekranina tiklamadan ayni Jules session icinde cevaplanabilir.
 - Komutlar proje klasoru calisma diziniyle calisir.
 - Standart cikti, hata cikisi ve exit code `CommandResult` olarak UI'a tasinir.
