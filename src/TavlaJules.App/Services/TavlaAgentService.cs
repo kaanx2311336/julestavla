@@ -1400,13 +1400,12 @@ public sealed class TavlaAgentService
         }
 
         var normalized = NormalizeSessionDescription(prompt);
-        if (normalized.Contains("loadsnapshot", StringComparison.Ordinal)
-            || normalized.Contains("load snapshot", StringComparison.Ordinal)
-            || (normalized.Contains("snapshot", StringComparison.Ordinal)
-                && normalized.Contains("load", StringComparison.Ordinal)
-                && (normalized.Contains("mysql", StringComparison.Ordinal)
-                    || normalized.Contains("database", StringComparison.Ordinal)
-                    || normalized.Contains("gamestaterepository", StringComparison.Ordinal))))
+        if (MentionsFullMySqlPersistence(normalized))
+        {
+            return "data.mysql-game-persistence";
+        }
+
+        if (MentionsLoadSnapshot(normalized))
         {
             return "data.mysql-load-snapshot";
         }
@@ -1463,6 +1462,38 @@ public sealed class TavlaAgentService
         }
 
         return "";
+    }
+
+    private static bool MentionsFullMySqlPersistence(string normalized)
+    {
+        return normalized.Contains("mysql persistence layer", StringComparison.Ordinal)
+            || normalized.Contains("online persistence phase", StringComparison.Ordinal)
+            || normalized.Contains("igamerepository", StringComparison.Ordinal)
+            || normalized.Contains("imovesequencerepository", StringComparison.Ordinal)
+            || normalized.Contains("idicerollrepository", StringComparison.Ordinal)
+            || normalized.Contains("move_sequences", StringComparison.Ordinal)
+            || normalized.Contains("dice_rolls", StringComparison.Ordinal)
+            || (normalized.Contains("games", StringComparison.Ordinal)
+                && normalized.Contains("game_state_snapshots", StringComparison.Ordinal)
+                && normalized.Contains("repositories", StringComparison.Ordinal))
+            || (normalized.Contains("persist games", StringComparison.Ordinal)
+                && normalized.Contains("dice rolls", StringComparison.Ordinal));
+    }
+
+    private static bool MentionsLoadSnapshot(string normalized)
+    {
+        if (!(normalized.Contains("snapshot", StringComparison.Ordinal)
+            && (normalized.Contains("mysql", StringComparison.Ordinal)
+                || normalized.Contains("database", StringComparison.Ordinal)
+                || normalized.Contains("gamestaterepository", StringComparison.Ordinal))))
+        {
+            return false;
+        }
+
+        return normalized.Contains("loadsnapshot", StringComparison.Ordinal)
+            || normalized.Contains("load-snapshot", StringComparison.Ordinal)
+            || Regex.IsMatch(normalized, @"\b(load|loaded|loading|restore|restoring|resume|resuming)\s+(a\s+|the\s+)?(saved\s+)?snapshot\b", RegexOptions.IgnoreCase)
+            || Regex.IsMatch(normalized, @"\bsnapshot\s+(load|loader|loading|restore|restoration|resume|resumption)\b", RegexOptions.IgnoreCase);
     }
 
     private static bool IsPromptObjectiveImplemented(string projectFolder, string objectiveKey)
@@ -1564,8 +1595,14 @@ public sealed class TavlaAgentService
 
         return sessionsOutput
             .Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries)
+            .Where(IsActiveOrPendingSessionLine)
             .Select(line => BuildPromptObjectiveKey(ExtractSessionDescriptionFromLine(line)))
             .Any(sessionObjective => ObjectiveKeysMatch(sessionObjective, objectiveKey));
+    }
+
+    private static bool IsActiveOrPendingSessionLine(string line)
+    {
+        return !Regex.IsMatch(line, @"\b(Completed|Needs\s+review|Archived)\b", RegexOptions.IgnoreCase);
     }
 
     private static bool ObjectiveKeysMatch(string left, string right)

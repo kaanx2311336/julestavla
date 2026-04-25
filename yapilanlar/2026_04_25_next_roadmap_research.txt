@@ -1,0 +1,22 @@
+2026-04-25 - TavlaJules sonraki faz arastirmasi
+
+Mevcut durum:
+- Engine tarafinda zar, turn state, legal moves, full-turn move sequences ve GameStateSnapshot mevcut.
+- TavlaJules.Data icinde GameStateRepository SaveSnapshotAsync/LoadSnapshotAsync var.
+- Yeni Jules session 2887011933552899147, data.mysql-game-persistence hedefiyle acildi.
+- TavlaJules.Data.csproj icinde Npgsql referansi gorunuyor; sonraki DB fazinda MySQL disi stack yayilmasi engellenmeli.
+
+Oncelikli sonraki isler:
+1. MySQL persistence fazi: migrations/ altinda idempotent raw SQL, games/game_state_snapshots/move_sequences/dice_rolls tablolari, repository methodlari ve testsiz live DB gerektirmeyen unit testler.
+2. TAVLA_ONLINE_MYSQL ayrimi: ajan raporu icin AJANLARIM_MYSQL, oyun kaydi icin TAVLA_ONLINE_MYSQL net ayrilmali.
+3. GameSessionService: yeni oyun acma, zar atma, move sequence uygulama, snapshot/move/dice kaydetme tek servis katmaninda toparlanmali.
+4. Mobil oyun akisi: once responsive web/PWA veya sade mobil UI prototipi; masaustu ajan panelinden ayrilmali.
+5. Online oda/match modeli: lobby, game_id, iki oyuncu, reconnect ve turn timeout semasi.
+6. AI oyuncu: move sequence degerlendirme, pip count, hit/blot riski ve bearing-off heuristics.
+7. Ajan dayanıklılığı: objectiveKey, actionReason, duplicateReason ve stuckMinutes alanlari SQL/dashboard'a eklenmeli; ajan neden bekledigini tek bakista gostermeli.
+8. Test genisletme: random oyun simülasyonu, invariant testleri, bar/bearing-off/double dice golden case setleri.
+
+Riskler:
+- EF Core/PostgreSQL/Docker gibi repo disi stack ekleme, mevcut kucuk C# cozumunu sisirebilir.
+- Aiven canli DB uzerinde migration calistirmadan once idempotent SQL ve kuru test komutlari hazir olmali.
+- Ajan duplicate korumasi fazla agresif olursa yeni fazlari yine bloke edebilir; event metadata her karari acik yazmali.

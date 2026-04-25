@@ -25,3 +25,5 @@ Beklenen etki:
 - Meta dosyaya yazan yanlis hedefli Jules sonucundan sonra ajan ayni persistence hedefini tekrar deneyebilir; kirli workspace bahanesiyle sonsuz blokta kalmaz.
 - Load-snapshot gibi daha dar DB adimlari, onceki genis persistence hedefinin duplicate kaydina takilmadan yeni Jules session acabilir.
 - `AutoStartAgent` true iken otomatik ajan baslatma constructor'dan `OnShown` asamasina tasindi; pencere handle'i olusmadan `BeginInvoke` cagrisi yapilip uygulamanin sessizce kapanmasi engellendi.
+- Eski completed/needs-review/archived Jules satirlari artik `SessionsContainObjective` icinde aktif duplicate sayilmiyor; yanlis hedefli eski completed online persistence session'i yeni dogru `data.mysql-game-persistence` gorevini bloke etmeyecek.
+- Full MySQL persistence promptlari once yakalanacak sekilde hedef siniflandirma sirasi degistirildi; `payloads` gibi icinde `load` gecen kelimeler artik load-snapshot hedefi sayilip yeni persistence gorevini engellemeyecek.
