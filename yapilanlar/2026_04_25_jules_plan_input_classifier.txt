@@ -1,0 +1,18 @@
+2026-04-25 Jules plan/input classifier duzeltmesi
+
+Sorun:
+- Jules bazi sessionlarda CLI listesinde `Awaiting User Feedback` gorunuyor ama gercek mesaj `Please approve the following plan so Jules can proceed` veya `already implemented, finalize this commit` seklinde plan/finalize onayi istiyordu.
+- TavlaJules bunu normal kullanici sorusu sayip eski GameEngine dice/turn cevabini gonderiyor, sonra `RepliedAwaitingInputSessionIds` yuzunden ayni session'a tekrar dokunmuyordu.
+- Snapshot sessionlari da yanlis sablonla cevaplandigi icin Jules `CaptureGameStateSnapshot` imzasi gibi netlestirme sorularinda takiliyordu.
+
+Yapilan:
+- `TavlaAgentService` plan onayi/finalize cumlelerini ayri siniflandirir ve input kuyruğundan cikarir.
+- Plan onayi cevabi artik ayni session'da devam etmeyi, capability zaten varsa no-code finalize yapmayi ve snapshot icin net API imzasini kullanmayi soyler.
+- Awaiting input cevabi session aciklamasina gore snapshot, legal move/turn veya genel netlestirme promptu secer.
+- OpenRouter sistem promptuna Aiven MySQL gercegi eklendi; PostgreSQL/JSONB/EF Core DB planlari engellendi.
+
+Dogrulama:
+- `dotnet build TavlaJules.sln` basarili.
+- `dotnet test TavlaJules.sln` basarili: 39/39 test gecti.
+- `dotnet publish src/TavlaJules.App/TavlaJules.App.csproj -c Release -r win-x64 --self-contained false -o publish` basarili.
+- Takilan Jules session `2944088312952666872` icin plan onayi `feedbackGiven` akisiyle gonderildi ve `jules remote list --session` durumunda `In Progress` goruldu.

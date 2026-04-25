@@ -35,3 +35,7 @@
 - 2026-04-25 devam duzeltmesiyle hedef zaten uygulanmis completed session'da OpenRouter `nextPrompt:null` verse bile ajan lokal yol haritasindan sonraki faz promptunu secip yeni tracked Jules session'i acar.
 - Hedef siniflandirma sirasinda `move sequence/full-turn` ifadeleri `GenerateLegalMoves` referansindan once yakalanir; boylece yeni full-turn fazi yanlislikla eski legal-move hedefi sayilmaz.
 - BuildProjectContext icinde `OYUN FAZ DURUMU` vardir; model done gorunen hedefi tekrar onermemelidir.
+- 2026-04-25 plan/input duzeltmesiyle Jules session basligi `Awaiting User Feedback` gorunse bile aciklama `please approve`, `plan so Jules can proceed`, `already implemented`, `finalize this commit` gibi onay/finalize cumleleri iceriyorsa input degil plan onayi olarak islenir.
+- Awaiting input cevaplari artik tek bir hardcoded GameEngine dice/turn sablonu degildir; session aciklamasina gore snapshot, legal move/turn veya genel netlestirme promptu secilir.
+- Snapshot netlestirme cevabi `public static GameStateSnapshot CaptureGameStateSnapshot(GameEngine engine)` imzasini sabitler; mevcut capability zaten varsa Jules'e ek kod yazmadan session'i complete/finalize etmesi soylenir.
+- OpenRouter sistem promptu `ajanlarim` ve `tavla_online` icin Aiven MySQL gercegini vurgular; PostgreSQL/JSONB/EF Core DB planlari ancak repo zaten o stack'i acikca kullaniyorsa onerilebilir.

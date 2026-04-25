@@ -456,8 +456,7 @@ public sealed class TavlaAgentService
             return;
         }
 
-        automation.AwaitingInputReplyPrompt = BuildAwaitingInputReplyPrompt(settings);
-        automation.AwaitingPlanApprovalPrompt = BuildAwaitingPlanApprovalPrompt();
+        automation.AwaitingPlanApprovalPrompt = BuildAwaitingPlanApprovalPrompt(settings);
 
         if (!settings.AutoReplyAwaitingInputSessions)
         {
@@ -509,7 +508,13 @@ public sealed class TavlaAgentService
                 continue;
             }
 
-            var result = await julesCliService.ReplyToSessionAsync(settings, sessionId, automation.AwaitingInputReplyPrompt, cancellationToken);
+            var replyPrompt = BuildAwaitingInputReplyPrompt(settings, sessionId, sessionsOutput);
+            if (string.IsNullOrWhiteSpace(automation.AwaitingInputReplyPrompt))
+            {
+                automation.AwaitingInputReplyPrompt = replyPrompt;
+            }
+
+            var result = await julesCliService.ReplyToSessionAsync(settings, sessionId, replyPrompt, cancellationToken);
             automation.AwaitingInputReplyResults.Add(result);
 
             if (result.IsSuccess)
@@ -724,7 +729,9 @@ public sealed class TavlaAgentService
                 Line = line,
                 Match = Regex.Match(line, @"^\s*(?<id>\d{10,})", RegexOptions.IgnoreCase)
             })
-            .Where(item => item.Match.Success && IsAwaitingInputSessionLine(item.Line))
+            .Where(item => item.Match.Success
+                && !IsPlanApprovalSessionLine(item.Line)
+                && IsAwaitingInputSessionLine(item.Line))
             .Select(item => item.Match.Groups["id"].Value)
             .Distinct(StringComparer.Ordinal);
     }
@@ -739,6 +746,11 @@ public sealed class TavlaAgentService
 
     private static bool IsAwaitingInputSessionLine(string line)
     {
+        if (IsPlanApprovalSessionLine(line))
+        {
+            return false;
+        }
+
         if (Regex.IsMatch(
                 line,
                 @"(Awaiting\s+User|Awaiting\s+.*Feedback|User\s+Feedback|Needs\s+input|Waiting\s+for\s+.*input|Awaiting\s+Plan|Plan\s+Approval|Awaiting\s+.*Approval)",
@@ -815,13 +827,79 @@ public sealed class TavlaAgentService
     {
         return sessionsOutput
             .Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries)
-            .Select(line => Regex.Match(line, @"^\s*(?<id>\d{10,}).*(Awaiting\s+Plan|Plan\s+Approval|Awaiting\s+.*Approval)", RegexOptions.IgnoreCase))
-            .Where(match => match.Success)
-            .Select(match => match.Groups["id"].Value)
+            .Select(line => new
+            {
+                Line = line,
+                Match = Regex.Match(line, @"^\s*(?<id>\d{10,})", RegexOptions.IgnoreCase)
+            })
+            .Where(item => item.Match.Success && IsPlanApprovalSessionLine(item.Line))
+            .Select(item => item.Match.Groups["id"].Value)
             .Distinct(StringComparer.Ordinal);
     }
 
-    private static string BuildAwaitingInputReplyPrompt(ProjectSettings settings)
+    private static bool IsPlanApprovalSessionLine(string line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return false;
+        }
+
+        if (Regex.IsMatch(
+                line,
+                @"(Awaiting\s+Plan|Plan\s+Approval|Awaiting\s+.*Approval)",
+                RegexOptions.IgnoreCase))
+        {
+            return true;
+        }
+
+        if (Regex.IsMatch(line, @"\b(Completed|Needs\s+review|In\s+Progress)\b", RegexOptions.IgnoreCase))
+        {
+            return false;
+        }
+
+        var description = NormalizeSessionDescription(ExtractSessionDescriptionFromLine(line));
+        return description.Contains("please approve", StringComparison.Ordinal)
+            || description.Contains("approve the following plan", StringComparison.Ordinal)
+            || description.Contains("plan so jules can proceed", StringComparison.Ordinal)
+            || description.Contains("finalize this commit", StringComparison.Ordinal)
+            || description.Contains("no changes to code", StringComparison.Ordinal)
+            || description.Contains("consider this step already completed", StringComparison.Ordinal)
+            || description.Contains("already implemented", StringComparison.Ordinal);
+    }
+
+    private static string BuildAwaitingInputReplyPrompt(ProjectSettings settings, string sessionId, string sessionsOutput)
+    {
+        var description = NormalizeSessionDescription(TryGetSessionDescription(sessionsOutput, sessionId));
+        if (description.Contains("capturegamestatesnapshot", StringComparison.Ordinal)
+            || description.Contains("game state snapshot", StringComparison.Ordinal)
+            || description.Contains("snapshot method", StringComparison.Ordinal))
+        {
+            return BuildSnapshotClarificationPrompt(settings);
+        }
+
+        if (description.Contains("generatelegalmoves", StringComparison.Ordinal)
+            || description.Contains("roll dice", StringComparison.Ordinal)
+            || description.Contains("rolldice", StringComparison.Ordinal)
+            || description.Contains("turn management", StringComparison.Ordinal)
+            || description.Contains("gameengine method", StringComparison.Ordinal))
+        {
+            return BuildTurnDiceClarificationPrompt(settings);
+        }
+
+        return $"""
+        Continue this same Jules session for repo {settings.GitHubRepo}.
+
+        Do not ask another clarification question. Use the existing codebase, `prodetayi/` summaries, and `yapilanlar/` notes to choose the smallest safe implementation detail. If the requested capability is already implemented, finalize the session with no code changes and mark it complete.
+
+        Guardrails:
+        - Keep each patch focused around 100-500 lines.
+        - Update relevant `prodetayi/` summaries and add one dated `yapilanlar/` note if you touch code.
+        - Use the existing project stack and Aiven MySQL assumptions; do not introduce PostgreSQL, JSONB, or EF Core unless they already exist in this repo.
+        - Do not print or commit secrets, `.env`, API keys, or database passwords.
+        """;
+    }
+
+    private static string BuildTurnDiceClarificationPrompt(ProjectSettings settings)
     {
         return $"""
         Here are the exact GameEngine requirements. Please continue this same Jules session and implement them now; do not ask another clarification question.
@@ -868,12 +946,43 @@ public sealed class TavlaAgentService
         """;
     }
 
-    private static string BuildAwaitingPlanApprovalPrompt()
+    private static string BuildSnapshotClarificationPrompt(ProjectSettings settings)
     {
-        return """
-        Plan approved. Please proceed with the implementation now.
+        return $"""
+        Continue this same Jules session for repo {settings.GitHubRepo}.
 
-        Keep the scope focused on the agreed GameEngine turn/dice orchestration work, update the related tests, update the relevant `prodetayi/` summary, and add one dated `yapilanlar/` note. Do not ask another clarification question unless a build-blocking ambiguity remains. Do not include secrets or `.env` values.
+        If the snapshot capability is already implemented, finalize this session with no additional code changes and mark it complete.
+
+        If a `CaptureGameStateSnapshot` signature is still required, use exactly this API:
+        `public static GameStateSnapshot CaptureGameStateSnapshot(GameEngine engine)`
+
+        Snapshot contents:
+        - points 1..24 as immutable `PointSnapshot(index, color, checkerCount)` values
+        - `WhiteCheckersOnBar`, `BlackCheckersOnBar`
+        - `WhiteCheckersBorneOff`, `BlackCheckersBorneOff`
+        - `CurrentTurn`
+        - immutable copy of `RemainingDice`
+        - `TurnNumber`
+
+        Keep this as an engine/model task only. Do not add DB persistence in this session. Database persistence must be a later separate phase and must use the existing project stack/Aiven MySQL assumptions, not PostgreSQL or JSONB unless the repo already has that stack.
+
+        Update relevant `prodetayi/` summaries and add one dated `yapilanlar/` note if you touch code. Do not print or commit secrets.
+        """;
+    }
+
+    private static string BuildAwaitingPlanApprovalPrompt(ProjectSettings settings)
+    {
+        return $"""
+        Plan approved. Please continue this same Jules session for repo {settings.GitHubRepo}.
+
+        If your review says the requested engine capability already exists, finalize this session with no additional code changes and mark the task complete.
+
+        If you still need the snapshot method signature, use exactly:
+        `public static GameStateSnapshot CaptureGameStateSnapshot(GameEngine engine)`
+
+        Keep persistence/database work out of `TavlaJules.Engine` for this approval. Any later DB phase must be a separate task and must use the existing project stack/Aiven MySQL assumptions, not PostgreSQL, JSONB, or EF Core unless those are already present in this repo.
+
+        Update related tests, relevant `prodetayi/` summaries, and one dated `yapilanlar/` note if you touch code. Do not ask another clarification question unless a build-blocking ambiguity remains. Do not include secrets or `.env` values.
         """;
     }
 
@@ -1177,6 +1286,7 @@ public sealed class TavlaAgentService
         Batak yalnizca surec disiplini ornegidir; cevapta Batak, FAZ 95 veya baska eski proje icerigi yazma.
         Konu sadece TavlaJules, tavla oyunu, Jules sessionlari ve ajanlarim SQL raporlamasidir.
         Gizli anahtar, connection string veya .env icerigini asla tekrar etme.
+        DB gercegi: kullanici Aiven MySQL kullanir. `ajanlarim` ajan raporlari ve `tavla_online` oyun DB planlari MySQL uyumlu olmali; PostgreSQL, JSONB veya EF Core onermeyeceksin unless repo zaten bu stack'i acikca kullaniyorsa.
         Cevabini sadece gecerli JSON olarak ver:
         {
           "statusSummary": "kisa durum",
