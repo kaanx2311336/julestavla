@@ -1,0 +1,14 @@
+2026-04-25 - MySQL persistence migrations eklendi
+
+Sorun:
+- TavlaJules.Data.csproj projesinde `Npgsql` referansı kalmıştı, ancak proje hedefi (roadmap) `data.mysql-game-persistence` olarak belirlenmişti.
+
+Yapilan:
+- `TavlaJules.Data.csproj` icindeki `Npgsql` paketi kaldirildi ve yerine `MySqlConnector` eklendi.
+- `migrations/` klasoru olusturuldu.
+- `migrations/001_initial_schema.sql` dosyasi ile `games`, `game_state_snapshots`, `move_sequences` ve `dice_rolls` tablolari icin idempotent (CREATE TABLE IF NOT EXISTS) SQL komutlari eklendi.
+- Boylece ajan dongusunun `HasMySqlPersistenceMigration` kontrolu icin gerekli yapi tamamlanmis oldu.
+
+Dogrulama:
+- Proje `dotnet build` ile basariyla derleniyor.
+- `dotnet test` ile Engine testleri calismaya devam ediyor.
