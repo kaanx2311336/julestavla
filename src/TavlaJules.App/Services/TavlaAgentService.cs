@@ -1259,7 +1259,9 @@ public sealed class TavlaAgentService
             return loadSnapshotPrompt;
         }
 
-        if (!objectiveKey.Equals("data.mysql-game-persistence", StringComparison.Ordinal))
+        if (!objectiveKey.Equals("data.mysql-game-persistence", StringComparison.Ordinal)
+            && !objectiveKey.Equals("data.mysql-schema", StringComparison.Ordinal)
+            && !objectiveKey.Equals("data.mysql-repository", StringComparison.Ordinal))
         {
             return proposedPrompt;
         }
@@ -1354,26 +1356,52 @@ public sealed class TavlaAgentService
             """;
         }
 
-        if (!IsPromptObjectiveImplemented(settings.ProjectFolder, "data.mysql-game-persistence"))
+        if (!IsPromptObjectiveImplemented(settings.ProjectFolder, "data.mysql-schema"))
         {
             return $"""
-            Create the next TavlaJules online persistence phase for repo {settings.GitHubRepo}.
+            Create the TavlaJules MySQL schema phase for repo {settings.GitHubRepo}.
 
             Target files:
             - new MySQL migration script under `migrations/`
-            - `src/TavlaJules.Data/Repositories/GameStateRepository.cs`
-            - focused tests under `src/TavlaJules.Engine.Tests/`
+            - `src/TavlaJules.Data/TavlaJules.Data.csproj`
             - relevant `prodetayi/` summaries and one dated `yapilanlar/` note
 
             Goal:
-            Engine phases are already implemented. Prepare the Aiven MySQL `tavla_online` schema and repository code so completed turns can persist games, snapshots, dice rolls, and generated move sequences.
+            Engine phases are already implemented. Prepare the Aiven MySQL `tavla_online` schema so completed turns can later persist games, snapshots, dice rolls, and generated move sequences.
 
             Requirements:
             - Use MySQL-compatible SQL only; do not use PostgreSQL, JSONB, or EF Core unless those are already present in this repo.
             - Add idempotent `CREATE TABLE IF NOT EXISTS` statements for `games`, `game_state_snapshots`, `move_sequences`, and `dice_rolls`.
             - Keep snapshot and sequence payloads as JSON text/LONGTEXT columns suitable for MySQL.
-            - Add repository methods only where the existing `GameStateRepository` pattern fits; do not rewrite unrelated engine code.
-            - Add tests that verify generated SQL/repository commands include the expected tables and parameters without requiring a live database.
+            - Ensure `src/TavlaJules.Data/TavlaJules.Data.csproj` uses `MySqlConnector` and does not add PostgreSQL packages.
+            - Keep this patch schema-only, around 100-300 lines.
+            - Do not include secrets, API keys, connection strings, or `.env` values.
+            """;
+        }
+
+        if (!IsPromptObjectiveImplemented(settings.ProjectFolder, "data.mysql-repository"))
+        {
+            return $"""
+            Create the TavlaJules MySQL repository phase for repo {settings.GitHubRepo}.
+
+            Target files:
+            - new or updated `src/TavlaJules.Data/Repositories/MySqlGameRepository.cs`
+            - `src/TavlaJules.Data/Repositories/GameStateRepository.cs` only if needed for compatibility
+            - focused tests under the existing test project
+            - relevant `prodetayi/` summaries and one dated `yapilanlar/` note
+
+            Goal:
+            The MySQL schema/migration phase is already present. Add the repository code that persists and reads Tavla online game data without requiring EF Core, Docker, PostgreSQL, JSONB, or secrets in source.
+
+            Requirements:
+            - Use `MySqlConnector`, parameterized SQL, async methods, and the existing `IDbConnectionFactory` pattern where possible.
+            - Implement methods equivalent to:
+              - `Task SaveSnapshotAsync(GameStateSnapshot snapshot, string? gameId = null, CancellationToken cancellationToken = default)`
+              - `Task<GameStateSnapshot?> LoadSnapshotAsync(string gameId, CancellationToken cancellationToken = default)`
+              - `Task SaveMoveSequenceAsync(string gameId, MoveSequence sequence, CancellationToken cancellationToken = default)`
+              - `Task SaveDiceRollAsync(string gameId, int die1, int die2, PlayerColor player, CancellationToken cancellationToken = default)`
+            - Use the existing MySQL table names from `migrations/001_initial_schema.sql`: `games`, `game_state_snapshots`, `move_sequences`, and `dice_rolls`.
+            - Add tests that verify SQL command text, parameters, JSON serialization, and missing-row behavior without requiring a live database.
             - Keep the patch around 100-500 lines.
             - Do not include secrets, API keys, connection strings, or `.env` values.
             """;
@@ -1414,9 +1442,14 @@ public sealed class TavlaAgentService
         }
 
         var normalized = NormalizeSessionDescription(prompt);
-        if (MentionsFullMySqlPersistence(normalized))
+        if (MentionsMySqlRepositoryLayer(normalized))
         {
-            return "data.mysql-game-persistence";
+            return "data.mysql-repository";
+        }
+
+        if (MentionsMySqlSchema(normalized))
+        {
+            return "data.mysql-schema";
         }
 
         if (MentionsLoadSnapshot(normalized))
@@ -1478,13 +1511,19 @@ public sealed class TavlaAgentService
         return "";
     }
 
-    private static bool MentionsFullMySqlPersistence(string normalized)
+    private static bool MentionsMySqlRepositoryLayer(string normalized)
     {
-        return normalized.Contains("mysql persistence layer", StringComparison.Ordinal)
-            || normalized.Contains("online persistence phase", StringComparison.Ordinal)
+        return normalized.Contains("mysql repository phase", StringComparison.Ordinal)
+            || normalized.Contains("mysql persistence layer", StringComparison.Ordinal)
+            || normalized.Contains("mysqlgamerepository", StringComparison.Ordinal)
             || normalized.Contains("igamerepository", StringComparison.Ordinal)
             || normalized.Contains("imovesequencerepository", StringComparison.Ordinal)
             || normalized.Contains("idicerollrepository", StringComparison.Ordinal)
+            || normalized.Contains("savemovesequenceasync", StringComparison.Ordinal)
+            || normalized.Contains("savedicerollasync", StringComparison.Ordinal)
+            || normalized.Contains("repository code", StringComparison.Ordinal)
+            || normalized.Contains("repository class", StringComparison.Ordinal)
+            || normalized.Contains("repositories", StringComparison.Ordinal)
             || normalized.Contains("move_sequences", StringComparison.Ordinal)
             || normalized.Contains("dice_rolls", StringComparison.Ordinal)
             || (normalized.Contains("games", StringComparison.Ordinal)
@@ -1492,6 +1531,18 @@ public sealed class TavlaAgentService
                 && normalized.Contains("repositories", StringComparison.Ordinal))
             || (normalized.Contains("persist games", StringComparison.Ordinal)
                 && normalized.Contains("dice rolls", StringComparison.Ordinal));
+    }
+
+    private static bool MentionsMySqlSchema(string normalized)
+    {
+        return normalized.Contains("mysql schema phase", StringComparison.Ordinal)
+            || normalized.Contains("migration script", StringComparison.Ordinal)
+            || normalized.Contains("migration scripts", StringComparison.Ordinal)
+            || normalized.Contains("create table if not exists", StringComparison.Ordinal)
+            || (normalized.Contains("migrations/", StringComparison.Ordinal)
+                && normalized.Contains("game_state_snapshots", StringComparison.Ordinal))
+            || (normalized.Contains("schema", StringComparison.Ordinal)
+                && normalized.Contains("dice_rolls", StringComparison.Ordinal));
     }
 
     private static bool MentionsLoadSnapshot(string normalized)
@@ -1539,14 +1590,53 @@ public sealed class TavlaAgentService
             "engine.game-state-snapshot" =>
                 Directory.Exists(Path.Combine(projectFolder, "src", "TavlaJules.Engine", "Models"))
                 && Directory.GetFiles(Path.Combine(projectFolder, "src", "TavlaJules.Engine", "Models"), "*Snapshot*.cs").Length > 0,
+            "data.mysql-schema" =>
+                HasMySqlPersistenceMigration(projectFolder)
+                && HasMySqlConnectorDependency(projectFolder),
+            "data.mysql-repository" =>
+                HasMySqlGameRepositoryLayer(projectFolder),
             "data.mysql-game-persistence" =>
                 HasMySqlPersistenceMigration(projectFolder)
-                && gameStateRepository.Contains("tavla_game_snapshots", StringComparison.Ordinal)
-                && gameStateRepository.Contains("SaveSnapshotAsync", StringComparison.Ordinal),
+                && HasMySqlGameRepositoryLayer(projectFolder),
             "data.mysql-load-snapshot" =>
                 gameStateRepository.Contains("LoadSnapshotAsync", StringComparison.Ordinal),
             _ => false
         };
+    }
+
+    private static bool HasMySqlConnectorDependency(string projectFolder)
+    {
+        var dataProjectPath = Path.Combine(projectFolder, "src", "TavlaJules.Data", "TavlaJules.Data.csproj");
+        if (!File.Exists(dataProjectPath))
+        {
+            return false;
+        }
+
+        var csproj = File.ReadAllText(dataProjectPath);
+        return csproj.Contains("MySqlConnector", StringComparison.Ordinal)
+            && !csproj.Contains("Npgsql", StringComparison.Ordinal);
+    }
+
+    private static bool HasMySqlGameRepositoryLayer(string projectFolder)
+    {
+        var repositoriesPath = Path.Combine(projectFolder, "src", "TavlaJules.Data", "Repositories");
+        if (!Directory.Exists(repositoriesPath))
+        {
+            return false;
+        }
+
+        var repositoryCode = string.Join(
+            Environment.NewLine,
+            Directory.GetFiles(repositoriesPath, "*.cs", SearchOption.AllDirectories)
+                .Select(File.ReadAllText));
+
+        return repositoryCode.Contains("SaveSnapshotAsync", StringComparison.Ordinal)
+            && repositoryCode.Contains("LoadSnapshotAsync", StringComparison.Ordinal)
+            && repositoryCode.Contains("SaveMoveSequenceAsync", StringComparison.Ordinal)
+            && repositoryCode.Contains("SaveDiceRollAsync", StringComparison.Ordinal)
+            && repositoryCode.Contains("game_state_snapshots", StringComparison.Ordinal)
+            && repositoryCode.Contains("move_sequences", StringComparison.Ordinal)
+            && repositoryCode.Contains("dice_rolls", StringComparison.Ordinal);
     }
 
     private static bool HasMySqlPersistenceMigration(string projectFolder)
@@ -1633,6 +1723,16 @@ public sealed class TavlaAgentService
         }
 
         if (left.Equals(right, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if ((left.Equals("data.mysql-game-persistence", StringComparison.Ordinal)
+                && (right.Equals("data.mysql-schema", StringComparison.Ordinal)
+                    || right.Equals("data.mysql-repository", StringComparison.Ordinal)))
+            || (right.Equals("data.mysql-game-persistence", StringComparison.Ordinal)
+                && (left.Equals("data.mysql-schema", StringComparison.Ordinal)
+                    || left.Equals("data.mysql-repository", StringComparison.Ordinal))))
         {
             return true;
         }
@@ -1728,6 +1828,8 @@ public sealed class TavlaAgentService
             ["explicitDiceLegalMoves"] = IsPromptObjectiveImplemented(projectFolder, "engine.generate-legal-moves-explicit-dice") ? "done" : "missing",
             ["fullTurnMoveSequences"] = IsPromptObjectiveImplemented(projectFolder, "engine.move-sequences") ? "done" : "missing",
             ["gameStateSnapshot"] = IsPromptObjectiveImplemented(projectFolder, "engine.game-state-snapshot") ? "done" : "missing",
+            ["mysqlSchema"] = IsPromptObjectiveImplemented(projectFolder, "data.mysql-schema") ? "done" : "missing",
+            ["mysqlRepository"] = IsPromptObjectiveImplemented(projectFolder, "data.mysql-repository") ? "done" : "missing",
             ["mysqlGamePersistence"] = IsPromptObjectiveImplemented(projectFolder, "data.mysql-game-persistence") ? "done" : "missing"
         };
 
@@ -1746,7 +1848,7 @@ public sealed class TavlaAgentService
         Jules Awaiting User Feedback/Input durumundaysa bunu bekleyen soru olarak raporla; tavlajules bu durumda netlestirilmis kurtarma promptu uretebilir.
         Completed is apply/dogrulama/commit/push ile guvenli hale geldiyse nextPrompt bir sonraki kucuk faz olsun.
         Ayni methodu veya ayni hedefi farkli cumlelerle tekrar onerme. OYUN FAZ DURUMU icinde done gorunen hedefler icin nextPrompt yazma.
-        GenerateLegalMoves ve dice/turn isleri done ise sonraki dogru oyun fazi full-turn move sequence generation, sonra game state snapshot, sonra online DB persistence olmalidir.
+        GenerateLegalMoves ve dice/turn isleri done ise sonraki dogru oyun fazi full-turn move sequence generation, sonra game state snapshot, sonra MySQL schema, sonra MySQL repository persistence olmalidir.
         nextPrompt mutlaka dosya/modul bazli, test/dogrulama beklentili, 100-500 satir bandinda ve mevcut prodetayi/yapilanlar disiplinine uygun olsun.
         Proje, kullanicinin daha once yaptigi Batak projesine benzer sekilde fazli, loglu, prodetayi hafizali ve Jules destekli ilerlemelidir.
         Batak yalnizca surec disiplini ornegidir; cevapta Batak, FAZ 95 veya baska eski proje icerigi yazma.

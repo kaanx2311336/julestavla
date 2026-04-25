@@ -1,0 +1,17 @@
+2026-04-26 - MySQL repository roadmap takilmasi duzeltildi
+
+Sorun:
+- Jules, MySQL migration patch'ini tamamladiktan sonra ajan `data.mysql-game-persistence` hedefini tamamlanmis kabul ediyordu.
+- Bu kontrol yalnizca migration dosyasi ve eski `GameStateRepository.SaveSnapshotAsync` varligina baktigi icin asil eksik olan repository katmani (`SaveMoveSequenceAsync`, `SaveDiceRollAsync`, tam snapshot load/save) baslatilmiyordu.
+- Sonuc olarak OpenRouter `shouldStartNewJulesSession=true` donse bile yeni Jules gorevi acilmiyor, panel sadece rapor yazarak dongude kaliyor gibi gorunuyordu.
+
+Yapilan:
+- MySQL persistence hedefi iki alt faza ayrildi:
+  - `data.mysql-schema`: migration dosyalari ve `MySqlConnector` bagimliligi.
+  - `data.mysql-repository`: async repository metotlari ve MySQL tablo kullanimi.
+- `data.mysql-game-persistence` geriye uyumluluk icin ust hedef olarak birakildi; artik hem schema hem repository tamamlanmadan done sayilmaz.
+- Yeni repository promptlari `data.mysql-repository` hedef anahtariyla takip edilir, boylece onceki genis persistence prompt kayitlari yeni repository isini susturmaz.
+
+Dogrulama beklentisi:
+- Bir sonraki ajan turunda schema done, repository missing gorunmeli.
+- Ajan `MySqlGameRepository` / repository metotlari icin yeni prompt uretmeli ve ayni persistence session'i ile baglantiliysa completed Jules session altindan devam edebilmelidir.
