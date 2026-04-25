@@ -76,7 +76,7 @@ public sealed class TavlaAgentService
                 && !automation.AutomationBlocked;
             if (string.IsNullOrWhiteSpace(nextPrompt) && shouldStartNextImplementedPhase)
             {
-                var completedObjectiveKey = BuildPromptObjectiveKey(TryGetSessionDescription(relevantSessionsOutput, trackedSessionIdAtStart));
+                var completedObjectiveKey = ResolveSessionObjectiveKey(settings, relevantSessionsOutput, trackedSessionIdAtStart);
                 nextPrompt = BuildNextGameImprovementPrompt(settings, completedObjectiveKey);
                 if (!string.IsNullOrWhiteSpace(nextPrompt))
                 {
@@ -433,6 +433,28 @@ public sealed class TavlaAgentService
             return automation;
         }
 
+        automation.JulesPullResult = await julesCliService.PullSessionAsync(settings, trackedSessionId, apply: false, cancellationToken);
+        if (automation.JulesPullResult.IsSuccess
+            && IsCompletedPatchWrongTarget(completedObjectiveKey, automation.JulesPullResult.Output))
+        {
+            automation.AlreadyApplied = true;
+            automation.DuplicateCompletedSession = true;
+            automation.Summary = "Completed Jules patch'i hedef dosyalara dokunmadigi icin uygulanmadi; ajan ayni hedefi dogru dosya sinirlariyla yeniden gorevlendirecek.";
+            agentStateService.MarkCompletedSessionHandled(settings, trackedSessionId, trackedSessionId);
+            agentStateService.ForgetPromptSent(settings, BuildNextGameImprovementPrompt(settings, completedObjectiveKey), completedObjectiveKey, trackedSessionId);
+            events.Add(CreateEvent(
+                "completed_patch_wrong_target_skipped",
+                "warning",
+                "Jules tamamlanan isi meta/orkestrator dosyalarina yazmis; data/migration/test hedeflerine dokunmadigi icin patch apply edilmeyecek.",
+                new
+                {
+                    trackedSessionId,
+                    completedObjectiveKey,
+                    changedFiles = ExtractChangedFilesFromDiff(automation.JulesPullResult.Output)
+                }));
+            return automation;
+        }
+
         automation.GitStatusBeforeApply = await workspaceAutomationService.GetGitStatusAsync(settings, cancellationToken);
         events.Add(CreateEvent("git_status_before_apply", automation.GitStatusBeforeApply.IsSuccess ? "info" : "error", "Apply oncesi git durumu okundu.", new { automation.GitStatusBeforeApply.ExitCode, isClean = WorkspaceAutomationService.IsCleanStatus(automation.GitStatusBeforeApply) }));
 
@@ -463,7 +485,6 @@ public sealed class TavlaAgentService
             else
             {
                 automation.AutomationBlocked = true;
-                automation.JulesPullResult = await julesCliService.PullSessionAsync(settings, trackedSessionId, apply: false, cancellationToken);
                 automation.Summary = "Calisma alani temiz olmadigi icin completed Jules patch'i otomatik uygulanmadi.";
                 events.Add(CreateEvent("auto_apply_blocked_dirty_workspace", "warning", "Calisma alani temiz degil; otomatik apply durduruldu.", new { trackedSessionId, status = Trim(automation.GitStatusBeforeApply.Output + automation.GitStatusBeforeApply.Error, 1200) }));
             }
@@ -1168,6 +1189,8 @@ public sealed class TavlaAgentService
             return proposedPrompt;
         }
 
+        proposedPrompt = CanonicalizeNextPrompt(settings, objectiveKey, proposedPrompt, events);
+
         var implemented = IsPromptObjectiveImplemented(settings.ProjectFolder, objectiveKey);
         var alreadyInJules = SessionsContainObjective(sessionsOutput, objectiveKey);
         if (!implemented && !alreadyInJules)
@@ -1181,7 +1204,13 @@ public sealed class TavlaAgentService
             || string.IsNullOrWhiteSpace(replacementKey)
             || objectiveKey.Equals(replacementKey, StringComparison.Ordinal))
         {
-            return proposedPrompt;
+            events.Add(CreateEvent(
+                "next_prompt_already_done_skipped",
+                "warning",
+                "OpenRouter uygulanmis veya Jules listesinde bulunan hedefi onerdi; uygun sonraki roadmap fazi bulunamadigi icin prompt gonderilmeyecek.",
+                new { objectiveKey, replacementKey, implemented, alreadyInJules }));
+
+            return "";
         }
 
         events.Add(CreateEvent(
@@ -1191,6 +1220,55 @@ public sealed class TavlaAgentService
             new { objectiveKey, replacementKey, implemented, alreadyInJules }));
 
         return replacementPrompt;
+    }
+
+    private static string CanonicalizeNextPrompt(
+        ProjectSettings settings,
+        string objectiveKey,
+        string proposedPrompt,
+        List<AgentEvent> events)
+    {
+        if (objectiveKey.Equals("data.mysql-load-snapshot", StringComparison.Ordinal))
+        {
+            var loadSnapshotPrompt = BuildLoadSnapshotPrompt(settings);
+            events.Add(CreateEvent(
+                "next_prompt_canonicalized",
+                "warning",
+                "OpenRouter load-snapshot hedefini repo uyumlu TavlaJules.Data promptuna cevirdi.",
+                new
+                {
+                    objectiveKey,
+                    original = Trim(proposedPrompt, 700),
+                    canonical = Trim(loadSnapshotPrompt, 700)
+                }));
+
+            return loadSnapshotPrompt;
+        }
+
+        if (!objectiveKey.Equals("data.mysql-game-persistence", StringComparison.Ordinal))
+        {
+            return proposedPrompt;
+        }
+
+        var canonicalPrompt = BuildNextGameImprovementPrompt(settings, "engine.game-state-snapshot");
+        if (string.IsNullOrWhiteSpace(canonicalPrompt)
+            || canonicalPrompt.Equals(proposedPrompt, StringComparison.Ordinal))
+        {
+            return proposedPrompt;
+        }
+
+        events.Add(CreateEvent(
+            "next_prompt_canonicalized",
+            "warning",
+            "OpenRouter DB persistence hedefini genis veya repo disi onerdi; ajan mevcut TavlaJules.Data/MySQL roadmap promptuna cevirdi.",
+            new
+            {
+                objectiveKey,
+                original = Trim(proposedPrompt, 700),
+                canonical = Trim(canonicalPrompt, 700)
+            }));
+
+        return canonicalPrompt;
     }
 
     private static string BuildNextGameImprovementPrompt(ProjectSettings settings, string skippedObjectiveKey)
@@ -1262,7 +1340,56 @@ public sealed class TavlaAgentService
             """;
         }
 
+        if (!IsPromptObjectiveImplemented(settings.ProjectFolder, "data.mysql-game-persistence"))
+        {
+            return $"""
+            Create the next TavlaJules online persistence phase for repo {settings.GitHubRepo}.
+
+            Target files:
+            - new MySQL migration script under `migrations/`
+            - `src/TavlaJules.Data/Repositories/GameStateRepository.cs`
+            - focused tests under `src/TavlaJules.Engine.Tests/`
+            - relevant `prodetayi/` summaries and one dated `yapilanlar/` note
+
+            Goal:
+            Engine phases are already implemented. Prepare the Aiven MySQL `tavla_online` schema and repository code so completed turns can persist games, snapshots, dice rolls, and generated move sequences.
+
+            Requirements:
+            - Use MySQL-compatible SQL only; do not use PostgreSQL, JSONB, or EF Core unless those are already present in this repo.
+            - Add idempotent `CREATE TABLE IF NOT EXISTS` statements for `games`, `game_state_snapshots`, `move_sequences`, and `dice_rolls`.
+            - Keep snapshot and sequence payloads as JSON text/LONGTEXT columns suitable for MySQL.
+            - Add repository methods only where the existing `GameStateRepository` pattern fits; do not rewrite unrelated engine code.
+            - Add tests that verify generated SQL/repository commands include the expected tables and parameters without requiring a live database.
+            - Keep the patch around 100-500 lines.
+            - Do not include secrets, API keys, connection strings, or `.env` values.
+            """;
+        }
+
         return "";
+    }
+
+    private static string BuildLoadSnapshotPrompt(ProjectSettings settings)
+    {
+        return $"""
+        Create the TavlaJules MySQL load-snapshot capability for repo {settings.GitHubRepo}.
+
+        Target files:
+        - `src/TavlaJules.Data/Repositories/GameStateRepository.cs`
+        - focused tests under `src/TavlaJules.Engine.Tests/`
+        - relevant `prodetayi/` summaries and one dated `yapilanlar/` note
+
+        Goal:
+        The repository can already save a `GameStateSnapshot`. Add a focused load method so an online game can resume a saved snapshot.
+
+        Requirements:
+        - Add `Task<GameStateSnapshot?> LoadSnapshotAsync(string gameId, CancellationToken cancellationToken = default)` or a closely matching method to `GameStateRepository`.
+        - Use parameterized MySQL-compatible SQL only.
+        - Map the existing `tavla_game_snapshots` columns back into `GameStateSnapshot`, including points, bar counts, borne-off counts, current turn, remaining dice, and turn number.
+        - Return `null` when no snapshot exists for the requested game id.
+        - Add unit tests that verify command text/parameters and snapshot mapping without requiring a live database or Docker container.
+        - Do not create a new project, do not add EF Core, do not add Docker dependencies, and do not modify `TavlaAgentService`.
+        - Do not include secrets, API keys, connection strings, or `.env` values.
+        """;
     }
 
     private static string BuildPromptObjectiveKey(string prompt)
@@ -1273,6 +1400,48 @@ public sealed class TavlaAgentService
         }
 
         var normalized = NormalizeSessionDescription(prompt);
+        if (normalized.Contains("loadsnapshot", StringComparison.Ordinal)
+            || normalized.Contains("load snapshot", StringComparison.Ordinal)
+            || (normalized.Contains("snapshot", StringComparison.Ordinal)
+                && normalized.Contains("load", StringComparison.Ordinal)
+                && (normalized.Contains("mysql", StringComparison.Ordinal)
+                    || normalized.Contains("database", StringComparison.Ordinal)
+                    || normalized.Contains("gamestaterepository", StringComparison.Ordinal))))
+        {
+            return "data.mysql-load-snapshot";
+        }
+
+        if (normalized.Contains("tavla_online", StringComparison.Ordinal)
+            || normalized.Contains("aiven mysql", StringComparison.Ordinal)
+            || normalized.Contains("mysql persistence", StringComparison.Ordinal)
+            || normalized.Contains("mysqlgamerepository", StringComparison.Ordinal)
+            || normalized.Contains("igamerepository", StringComparison.Ordinal)
+            || normalized.Contains("online persistence", StringComparison.Ordinal)
+            || normalized.Contains("game_state_snapshots", StringComparison.Ordinal)
+            || normalized.Contains("move_sequences", StringComparison.Ordinal)
+            || normalized.Contains("dice_rolls", StringComparison.Ordinal)
+            || normalized.Contains("gamestaterepository", StringComparison.Ordinal))
+        {
+            return "data.mysql-game-persistence";
+        }
+
+        if (normalized.Contains("game state snapshot", StringComparison.Ordinal)
+            || normalized.Contains("serializable game state", StringComparison.Ordinal)
+            || normalized.Contains("snapshot layer", StringComparison.Ordinal)
+            || normalized.Contains("capturegamestatesnapshot", StringComparison.Ordinal)
+            || normalized.Contains("exact method signature", StringComparison.Ordinal))
+        {
+            return "engine.game-state-snapshot";
+        }
+
+        if (normalized.Contains("rolldice", StringComparison.Ordinal)
+            || normalized.Contains("startturn", StringComparison.Ordinal)
+            || normalized.Contains("remainingdice", StringComparison.Ordinal)
+            || normalized.Contains("advanceturn", StringComparison.Ordinal))
+        {
+            return "engine.turn-dice";
+        }
+
         if (normalized.Contains("movesequence", StringComparison.Ordinal)
             || normalized.Contains("move sequence", StringComparison.Ordinal)
             || normalized.Contains("full-turn", StringComparison.Ordinal)
@@ -1293,23 +1462,6 @@ public sealed class TavlaAgentService
                 : "engine.generate-legal-moves-current-turn";
         }
 
-        if (normalized.Contains("game state snapshot", StringComparison.Ordinal)
-            || normalized.Contains("serializable game state", StringComparison.Ordinal)
-            || normalized.Contains("snapshot layer", StringComparison.Ordinal)
-            || normalized.Contains("capturegamestatesnapshot", StringComparison.Ordinal)
-            || normalized.Contains("exact method signature", StringComparison.Ordinal))
-        {
-            return "engine.game-state-snapshot";
-        }
-
-        if (normalized.Contains("rolldice", StringComparison.Ordinal)
-            || normalized.Contains("startturn", StringComparison.Ordinal)
-            || normalized.Contains("remainingdice", StringComparison.Ordinal)
-            || normalized.Contains("advanceturn", StringComparison.Ordinal))
-        {
-            return "engine.turn-dice";
-        }
-
         return "";
     }
 
@@ -1317,8 +1469,10 @@ public sealed class TavlaAgentService
     {
         var gameEnginePath = Path.Combine(projectFolder, "src", "TavlaJules.Engine", "Engine", "GameEngine.cs");
         var movePath = Path.Combine(projectFolder, "src", "TavlaJules.Engine", "Models", "Move.cs");
+        var gameStateRepositoryPath = Path.Combine(projectFolder, "src", "TavlaJules.Data", "Repositories", "GameStateRepository.cs");
         var gameEngine = File.Exists(gameEnginePath) ? File.ReadAllText(gameEnginePath) : "";
         var move = File.Exists(movePath) ? File.ReadAllText(movePath) : "";
+        var gameStateRepository = File.Exists(gameStateRepositoryPath) ? File.ReadAllText(gameStateRepositoryPath) : "";
 
         return objectiveKey switch
         {
@@ -1333,12 +1487,72 @@ public sealed class TavlaAgentService
                 && gameEngine.Contains("RemainingDice", StringComparison.Ordinal)
                 && gameEngine.Contains("AdvanceTurn", StringComparison.Ordinal),
             "engine.move-sequences" =>
-                File.Exists(Path.Combine(projectFolder, "src", "TavlaJules.Engine", "Engine", "MoveSequenceGenerator.cs")),
+                File.Exists(Path.Combine(projectFolder, "src", "TavlaJules.Engine", "Engine", "MoveSequenceGenerator.cs"))
+                || (gameEngine.Contains("GenerateLegalMoveSequences", StringComparison.Ordinal)
+                    && gameEngine.Contains("GenerateSequencesRecursive", StringComparison.Ordinal)
+                    && gameEngine.Contains("maxDicePlayed", StringComparison.Ordinal)),
             "engine.game-state-snapshot" =>
                 Directory.Exists(Path.Combine(projectFolder, "src", "TavlaJules.Engine", "Models"))
                 && Directory.GetFiles(Path.Combine(projectFolder, "src", "TavlaJules.Engine", "Models"), "*Snapshot*.cs").Length > 0,
+            "data.mysql-game-persistence" =>
+                HasMySqlPersistenceMigration(projectFolder)
+                && gameStateRepository.Contains("tavla_game_snapshots", StringComparison.Ordinal)
+                && gameStateRepository.Contains("SaveSnapshotAsync", StringComparison.Ordinal),
+            "data.mysql-load-snapshot" =>
+                gameStateRepository.Contains("LoadSnapshotAsync", StringComparison.Ordinal),
             _ => false
         };
+    }
+
+    private static bool HasMySqlPersistenceMigration(string projectFolder)
+    {
+        var migrationsPath = Path.Combine(projectFolder, "migrations");
+        if (!Directory.Exists(migrationsPath))
+        {
+            return false;
+        }
+
+        return Directory.GetFiles(migrationsPath, "*.sql", SearchOption.AllDirectories)
+            .Select(File.ReadAllText)
+            .Any(sql =>
+                sql.Contains("CREATE TABLE IF NOT EXISTS", StringComparison.OrdinalIgnoreCase)
+                && sql.Contains("games", StringComparison.OrdinalIgnoreCase)
+                && sql.Contains("game_state_snapshots", StringComparison.OrdinalIgnoreCase)
+                && sql.Contains("move_sequences", StringComparison.OrdinalIgnoreCase)
+                && sql.Contains("dice_rolls", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsCompletedPatchWrongTarget(string objectiveKey, string diff)
+    {
+        if (string.IsNullOrWhiteSpace(diff)
+            || !(objectiveKey.StartsWith("data.", StringComparison.Ordinal)
+                || objectiveKey.StartsWith("online.", StringComparison.Ordinal)))
+        {
+            return false;
+        }
+
+        var changedFiles = ExtractChangedFilesFromDiff(diff);
+        if (changedFiles.Count == 0)
+        {
+            return false;
+        }
+
+        var touchesCorePersistenceTarget = changedFiles.Any(file =>
+            file.StartsWith("src/TavlaJules.Data/", StringComparison.Ordinal)
+            || file.StartsWith("migrations/", StringComparison.Ordinal)
+            || file.StartsWith("src/TavlaJules.Engine.Tests/", StringComparison.Ordinal)
+            || file.StartsWith("tests/", StringComparison.Ordinal));
+
+        return !touchesCorePersistenceTarget;
+    }
+
+    private static IReadOnlyList<string> ExtractChangedFilesFromDiff(string diff)
+    {
+        return Regex.Matches(diff, @"^diff --git a/(?<left>.+?) b/(?<right>.+?)$", RegexOptions.Multiline)
+            .Select(match => match.Groups["right"].Value.Trim())
+            .Where(file => !string.IsNullOrWhiteSpace(file))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
     }
 
     private static bool SessionsContainObjective(string sessionsOutput, string objectiveKey)
@@ -1456,7 +1670,8 @@ public sealed class TavlaAgentService
             ["singleLegalMoves"] = IsPromptObjectiveImplemented(projectFolder, "engine.generate-legal-moves-current-turn") ? "done" : "missing",
             ["explicitDiceLegalMoves"] = IsPromptObjectiveImplemented(projectFolder, "engine.generate-legal-moves-explicit-dice") ? "done" : "missing",
             ["fullTurnMoveSequences"] = IsPromptObjectiveImplemented(projectFolder, "engine.move-sequences") ? "done" : "missing",
-            ["gameStateSnapshot"] = IsPromptObjectiveImplemented(projectFolder, "engine.game-state-snapshot") ? "done" : "missing"
+            ["gameStateSnapshot"] = IsPromptObjectiveImplemented(projectFolder, "engine.game-state-snapshot") ? "done" : "missing",
+            ["mysqlGamePersistence"] = IsPromptObjectiveImplemented(projectFolder, "data.mysql-game-persistence") ? "done" : "missing"
         };
 
         return string.Join(Environment.NewLine, checks.Select(item => $"{item.Key}={item.Value}"));

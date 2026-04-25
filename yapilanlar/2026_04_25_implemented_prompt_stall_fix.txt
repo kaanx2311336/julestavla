@@ -1,0 +1,26 @@
+2026-04-25 - Implemented/duplicate prompt stall fix
+
+Sorun:
+- TavlaJules ajan dongusu OpenRouter'in onerisiyle ayni hedefi tekrar tekrar Jules'e tasiyordu.
+- `engine.move-sequences` hedefi yalnizca ayri `MoveSequenceGenerator.cs` dosyasi varsa tamamlanmis sayiliyordu.
+- Mevcut repo ise full-turn sequence mantigini `GameEngine.GenerateLegalMoveSequences(...)` icinde uyguladigi icin ajan bunu eksik sanabiliyordu.
+- OpenRouter uygulanmis bir hedef onerdiginde ve lokal roadmap yeni bir faz bulamadiginda eski prompt aynen geri donuyor, bu da dashboard/Jules tarafinda takilmis is gibi gorunuyordu.
+
+Yapilan:
+- `TavlaAgentService.IsPromptObjectiveImplemented` artik `GameEngine.GenerateLegalMoveSequences`, `GenerateSequencesRecursive` ve maksimum zar kullanim kontrolunu gorurse `engine.move-sequences` hedefini tamamlanmis kabul eder.
+- `SelectNextPrompt`, uygulanmis veya Jules listesinde zaten olan hedef icin yeni roadmap fazi bulamazsa promptu bosaltir ve `next_prompt_already_done_skipped` event'i yazar.
+- Completed/no-op session sonrasi sonraki faz secilirken kisaltilmis Jules basligi yerine `AgentStateService` session-objective map'i kullanilir.
+- Engine roadmap biterse yeni deterministik faz `data.mysql-game-persistence` olarak secilir.
+- Bu faz Aiven MySQL `tavla_online` icin `games`, `game_state_snapshots`, `move_sequences`, `dice_rolls` migration/repository/test isini Jules'e yeni session olarak verir.
+- DB persistence promptlari once MySQL/tavla_online anahtarlariyla siniflandirilir; `MoveSequence` kelimesi gecse bile eski `engine.move-sequences` hedefiyle karistirilmaz.
+- OpenRouter'in repo disina tasan DB promptlari kanonik TavlaJules.Data/MySQL promptuna cevrilir.
+- Completed DB/persistence session sadece `TavlaAgentService.cs` gibi meta dosyalari degistirirse wrong-target kabul edilir. Bu patch apply edilmez, ilgili prompt/objective tekrar korumasi temizlenir ve hedef dogru data/migration/test dosyalariyla tekrar acilabilir.
+- `LoadSnapshotAsync` onerileri ayri `data.mysql-load-snapshot` hedefi olarak takip edilir ve repo uyumlu `GameStateRepository` promptuna kanoniklestirilir.
+
+Beklenen etki:
+- Ajan artik `Implement/GenerateLegalMoves/full-turn move sequence` gibi tamamlanmis hedefleri tekrar gondermez.
+- Engine icinde uygun yeni faz kalmadiginda DB persistence fazina gecerek yeni Jules gorevi baslatir.
+- Baglantili yeni prompt varsa completed session altina reply olarak yazma, baglantisiz DB/UI gibi yuzeylerde yeni session acma davranisi korunur.
+- `shouldStartNewJulesSession:true` olan MySQL persistence raporlari artik `implemented_next_prompt_skipped` veya `duplicate_next_prompt_skipped` nedeniyle sessizce atlanmamalidir.
+- Meta dosyaya yazan yanlis hedefli Jules sonucundan sonra ajan ayni persistence hedefini tekrar deneyebilir; kirli workspace bahanesiyle sonsuz blokta kalmaz.
+- Load-snapshot gibi daha dar DB adimlari, onceki genis persistence hedefinin duplicate kaydina takilmadan yeni Jules session acabilir.

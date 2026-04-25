@@ -151,6 +151,29 @@ public sealed class AgentStateService
         Save(settings, state);
     }
 
+    public void ForgetPromptSent(ProjectSettings settings, string prompt, string objectiveKey, string sessionId)
+    {
+        var state = Load(settings);
+
+        if (!string.IsNullOrWhiteSpace(prompt))
+        {
+            state.SentPromptHashes.RemoveAll(item => item.Equals(HashPrompt(prompt), StringComparison.Ordinal));
+        }
+
+        if (!string.IsNullOrWhiteSpace(objectiveKey))
+        {
+            state.SentPromptObjectiveKeys.RemoveAll(item => item.Equals(objectiveKey, StringComparison.Ordinal));
+        }
+
+        if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            state.SessionObjectiveKeys.Remove(sessionId);
+        }
+
+        state.UpdatedAt = DateTimeOffset.Now;
+        Save(settings, state);
+    }
+
     public void MarkAwaitingInputSessionHandled(ProjectSettings settings, string sessionId, string newSessionId)
     {
         var state = Load(settings);

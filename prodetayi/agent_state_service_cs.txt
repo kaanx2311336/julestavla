@@ -22,5 +22,6 @@
 - `MarkCompletedSessionContinuedInPlace`, baglantili prompt ayni completed session altina yazildiginda eski handled/applied kaydini temizler ve ayni session'i tekrar izlenebilir hale getirir.
 - `MarkCompletedSessionApplied`, completed session patch'inin tekrar uygulanmasini engellemek icin session id'yi apply listesine ekler.
 - `MarkPromptSent`, yeni Jules session basarili acildiginda prompt hash'ini kaydeder.
+- `ForgetPromptSent`, Jules session yanlis hedef dosyalara patch urettiginde ilgili prompt hash/objective/session map kaydini temizler; ayni hedef dogru dosya sinirlariyla yeniden gorevlendirilebilir.
 - `ParseSessionId`, `jules new` ciktisindaki `ID: ...` satirindan yeni Jules session id'sini okur.
 - Amac, completed bir Jules isinden sonra dakikalik ajan turunun ayni is icin tekrar tekrar yeni session acmasini engellemektir.
