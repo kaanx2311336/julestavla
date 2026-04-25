@@ -47,6 +47,16 @@ public sealed class MainForm : Form
         ConfigureAgentTimer();
         RefreshPhaseList();
         AppendLog("TavlaJules kontrol paneli hazir.");
+        if (settings.AutoStartAgent)
+        {
+            BeginInvoke(new Action(() =>
+            {
+                if (!agentIsRunning)
+                {
+                    ToggleAgent();
+                }
+            }));
+        }
     }
 
     private void InitializeWindow()

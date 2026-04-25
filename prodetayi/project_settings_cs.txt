@@ -11,7 +11,8 @@
 - `AgentModel`: dakikalik orkestrator ajanin birincil modeli; varsayilan `openai/gpt-oss-120b:free`.
 - `AgentIntervalSeconds`: ajan periyodu; varsayilan 60 saniye.
 - `TrackedJulesSessionId`: dakika basi izlenecek Jules session ID.
-- `AllowAutoJulesSessions`: true olursa ajan, modelin onerisine gore yeni Jules session acabilir.
+- `AllowAutoJulesSessions`: true olursa ajan, modelin onerisine gore yeni Jules session acabilir; varsayilan true.
+- `AutoStartAgent`: true olursa kontrol paneli acildiginda dakikalik ajan otomatik baslar; varsayilan true.
 - `AutoContinueCompletedSessions`: true olursa izlenen Jules session tamamlandiginda ajan tek seferlik devam session'i acar; varsayilan true.
 - `AutoReplyAwaitingInputSessions`: true olursa repo icindeki `Awaiting User Feedback` ve `Awaiting Plan Approval` sessionlarina ayni Jules session icinde otomatik cevap/onay gonderir; varsayilan true.
 - `AutoRecoverAwaitingInputSessions`: true olursa izlenen Jules session `Awaiting User Feedback/Input` durumuna duserse ajan bir kez netlestirilmis kurtarma session'i acar; varsayilan true.

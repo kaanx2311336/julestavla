@@ -13,7 +13,8 @@ public sealed class ProjectSettings
     public string AgentModel { get; set; } = "openai/gpt-oss-120b:free";
     public int AgentIntervalSeconds { get; set; } = 60;
     public string TrackedJulesSessionId { get; set; } = "14009672719483814558";
-    public bool AllowAutoJulesSessions { get; set; }
+    public bool AllowAutoJulesSessions { get; set; } = true;
+    public bool AutoStartAgent { get; set; } = true;
     public bool AutoContinueCompletedSessions { get; set; } = true;
     public bool AutoReplyAwaitingInputSessions { get; set; } = true;
     public bool AutoRecoverAwaitingInputSessions { get; set; } = true;
