@@ -23,3 +23,5 @@
 - Ajan her turda otonom ozetini gunluge yazar; apply/verify/commit/push kararlari dashboard ve SQL eventlerinde ayrica izlenir.
 - Proje klasorunu ve GitHub reposunu dis uygulamada acabilir.
 MainForm.cs was updated to include the Oyun Tahtasi tab with the newly implemented GameBoardControl.
+
+- Passed `GamePersistenceService` into `GameBoardControl` on setup to allow local app-driven game state persistence testing.

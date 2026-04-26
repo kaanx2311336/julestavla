@@ -19,6 +19,8 @@ public partial class GameBoardControl : UserControl
     public Button NewGameButton { get; private set; }
     public Button RollDiceButton { get; private set; }
     public Button ApplyMoveButton { get; private set; }
+    public Button SaveGameButton { get; private set; }
+    public Button LoadGameButton { get; private set; }
     
     public Label LogLabel { get; private set; }
     
@@ -29,11 +31,17 @@ public partial class GameBoardControl : UserControl
     private List<Move> _legalMoves = new List<Move>();
     private int? _selectedSourcePoint;
     private Move _selectedMove;
+    private TavlaJules.App.Services.GamePersistenceService? _persistenceService;
 
     public GameBoardControl()
     {
         InitializeComponent();
         InitializeLayout();
+    }
+
+    public void SetPersistenceService(TavlaJules.App.Services.GamePersistenceService persistenceService)
+    {
+        _persistenceService = persistenceService;
     }
 
     private void InitializeLayout()
@@ -53,16 +61,20 @@ public partial class GameBoardControl : UserControl
         };
         
         NewGameButton = CreateButton("Yeni Oyun", 10);
-        RollDiceButton = CreateButton("Zar At", 120);
-        ApplyMoveButton = CreateButton("Hamle Yap", 230);
+        RollDiceButton = CreateButton("Zar At", 110);
+        ApplyMoveButton = CreateButton("Hamle Yap", 210);
+        SaveGameButton = CreateButton("Save Game", 310);
+        LoadGameButton = CreateButton("Load Last Snapshot", 410);
         
+        LoadGameButton.Width = 140;
+
         CurrentPlayerLabel = new Label
         {
             Text = "Sira: Bekleniyor...",
             ForeColor = Color.White,
             Font = new Font("Segoe UI", 12F, FontStyle.Bold),
             AutoSize = true,
-            Location = new System.Drawing.Point(360, 18)
+            Location = new System.Drawing.Point(560, 18)
         };
         
         LogLabel = new Label
@@ -71,12 +83,14 @@ public partial class GameBoardControl : UserControl
             ForeColor = Color.LightGray,
             Font = new Font("Segoe UI", 10F, FontStyle.Regular),
             AutoSize = true,
-            Location = new System.Drawing.Point(560, 20)
+            Location = new System.Drawing.Point(700, 20)
         };
 
         controlArea.Controls.Add(NewGameButton);
         controlArea.Controls.Add(RollDiceButton);
         controlArea.Controls.Add(ApplyMoveButton);
+        controlArea.Controls.Add(SaveGameButton);
+        controlArea.Controls.Add(LoadGameButton);
         controlArea.Controls.Add(CurrentPlayerLabel);
         controlArea.Controls.Add(LogLabel);
         
@@ -153,6 +167,8 @@ public partial class GameBoardControl : UserControl
         NewGameButton.Click += (s, e) => StartNewGame();
         RollDiceButton.Click += (s, e) => RollDice();
         ApplyMoveButton.Click += (s, e) => ApplySelectedMove();
+        SaveGameButton.Click += OnSaveGameClick;
+        LoadGameButton.Click += OnLoadGameClick;
         
         for (int i = 0; i < 24; i++)
         {
@@ -517,5 +533,104 @@ public partial class GameBoardControl : UserControl
         p.Controls.Add(l);
 
         return p;
+    }
+
+    private async void OnSaveGameClick(object? sender, EventArgs e)
+    {
+        if (_persistenceService == null)
+        {
+            LogMessage("DB baglantisi yok (TAVLA_ONLINE_MYSQL bulunamadi).");
+            return;
+        }
+
+        if (_gameEngine == null)
+        {
+            LogMessage("Kaydedilecek aktif bir oyun yok.");
+            return;
+        }
+
+        try
+        {
+            var snapshot = _gameEngine.CaptureGameStateSnapshot();
+            await _persistenceService.SaveSnapshotAsync(snapshot, "smoke-test-game");
+            LogMessage("Oyun basariyla kaydedildi.");
+        }
+        catch (Exception ex)
+        {
+            LogMessage($"Kaydetme hatasi: {ex.Message}");
+        }
+    }
+
+    private async void OnLoadGameClick(object? sender, EventArgs e)
+    {
+        if (_persistenceService == null)
+        {
+            LogMessage("DB baglantisi yok (TAVLA_ONLINE_MYSQL bulunamadi).");
+            return;
+        }
+
+        try
+        {
+            var snapshot = await _persistenceService.LoadSnapshotAsync("smoke-test-game");
+            if (snapshot == null)
+            {
+                LogMessage("Kayitli oyun bulunamadi.");
+                return;
+            }
+
+            var board = new Board();
+            foreach (var point in snapshot.Points)
+            {
+                if (point.CheckerCount > 0)
+                {
+                    board.Points[point.Index] = new TavlaJules.Engine.Models.Point(point.Index) { Color = point.Color, CheckerCount = point.CheckerCount };
+                }
+            }
+            board.WhiteCheckersOnBar = snapshot.WhiteCheckersOnBar;
+            board.BlackCheckersOnBar = snapshot.BlackCheckersOnBar;
+            board.WhiteCheckersBorneOff = snapshot.WhiteCheckersBorneOff;
+            board.BlackCheckersBorneOff = snapshot.BlackCheckersBorneOff;
+
+            _gameEngine = new GameEngine(board);
+            _gameEngine.SetTurn(snapshot.CurrentTurn);
+            
+            if (snapshot.RemainingDice.Count > 0)
+            {
+                _gameEngine.StartTurn(snapshot.CurrentTurn, snapshot.RemainingDice[0], snapshot.RemainingDice.Count > 1 ? snapshot.RemainingDice[1] : 0);
+                // Adjust if there were more than 2 dice originally or if the array represents current state exactly
+                // We clear and refill remaining dice manually to match snapshot
+                var remainingDiceField = typeof(GameEngine).GetField("_remainingDice", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (remainingDiceField != null)
+                {
+                    remainingDiceField.SetValue(_gameEngine, snapshot.RemainingDice.ToList());
+                }
+            }
+            else
+            {
+                // Clear remaining dice if empty
+                 var remainingDiceField = typeof(GameEngine).GetField("_remainingDice", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                 if (remainingDiceField != null)
+                 {
+                     remainingDiceField.SetValue(_gameEngine, new List<int>());
+                 }
+            }
+
+            _legalMoves.Clear();
+            _selectedSourcePoint = null;
+            _selectedMove = null!;
+
+            UpdateUiState();
+            RenderBoard(_gameEngine);
+            LogMessage("Oyun basariyla yuklendi.");
+        }
+        catch (Exception ex)
+        {
+            LogMessage($"Yukleme hatasi: {ex.Message}");
+        }
+    }
+
+    private void LogMessage(string message)
+    {
+        LogLabel.Text = $"[{DateTime.Now:HH:mm:ss}] {message}";
     }
 }

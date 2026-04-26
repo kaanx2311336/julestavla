@@ -38,9 +38,13 @@ public sealed class MainForm : Form
     private bool agentIsRunning;
     private bool agentTickInProgress;
 
+    private readonly GamePersistenceService? gamePersistenceService;
+
     public MainForm()
     {
         settings = settingsService.Load();
+        gamePersistenceService = CreateGamePersistenceService(settings, envFileService);
+
         InitializeWindow();
         BuildLayout();
         LoadSettingsToUi();
@@ -240,6 +244,10 @@ public sealed class MainForm : Form
         tabs.TabPages.Add(CreateTabPage("Gunluk", logTextBox));
         
         var boardControl = new Controls.GameBoardControl();
+        if (gamePersistenceService != null)
+        {
+            boardControl.SetPersistenceService(gamePersistenceService);
+        }
         tabs.TabPages.Add(CreateTabPage("Oyun Tahtasi", boardControl));
 
         panel.Controls.Add(tabs);
@@ -879,6 +887,21 @@ public sealed class MainForm : Form
     {
         return envFileService.GetValue(settings.ProjectFolder, "AJANLARIM_MYSQL")
             ?? envFileService.GetValue(settings.ProjectFolder, "TAVLA_ONLINE_MYSQL");
+    }
+
+    private static GamePersistenceService? CreateGamePersistenceService(
+        ProjectSettings settings,
+        EnvFileService envFileService)
+    {
+        if (!envFileService.HasValue(settings.ProjectFolder, "TAVLA_ONLINE_MYSQL")
+            && !envFileService.HasValue(settings.ProjectFolder, "AJANLARIM_MYSQL"))
+        {
+            return null;
+        }
+
+        var factory = new MySqlConnectionFactory(settings, envFileService);
+        var repository = new TavlaJules.Data.Repositories.MySqlGameRepository(factory);
+        return new GamePersistenceService(repository);
     }
 
     private static string CreateDefaultJulesPrompt()

@@ -3,9 +3,11 @@ Summarizes the `GameBoardControl` class located at `src/TavlaJules.App/Controls/
 *   **Purpose:** The visual representation of the Tavla game board and user interactions.
 *   **Key Components:**
     *   Holds the `GameEngine` instance and tracks local state like `_legalMoves`, `_selectedSourcePoint`, and `_selectedMove`.
+    *   Holds a `GamePersistenceService` dependency.
     *   Renders the board points (1-24), the bars, and the borne-off areas using Windows Forms `Panel` controls.
     *   `StartNewGame()` initializes the game engine.
     *   `RollDice()` calls the engine to roll and generate legal moves, advancing turn automatically if no moves are possible.
     *   Click handlers on points, bars, and borne-off areas enable move selection and highlighting.
     *   `ApplySelectedMove()` attempts to execute the `_selectedMove` against the engine.
     *   `UpdateUiState()` and `RenderBoard()` synchronize the visual layout with the `GameStateSnapshot` captured from the engine.
+    *   `OnSaveGameClick` and `OnLoadGameClick` allow the local engine state to be saved and restored via the persistence service using `"smoke-test-game"` ID.
