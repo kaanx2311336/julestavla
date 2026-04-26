@@ -1,0 +1,9 @@
+2026-04-26 - MySqlGameRepository eklendi
+
+Gorev: "Create the TavlaJules MySQL repository phase" (devam)
+
+Yapilan:
+- Tavla online game datasi icin EF Core, PostgreSQL, veya JSONB vs. kullanmadan saf MySQL ve parametreli SQL prensibi ile `MySqlGameRepository` class'i `src/TavlaJules.Data/Repositories/` altinda eklendi.
+- `SaveSnapshotAsync`, `LoadSnapshotAsync`, `SaveMoveSequenceAsync` ve `SaveDiceRollAsync` metotlari uygulandi, connection factory uzerinden MySql table'larina (`game_state_snapshots`, `move_sequences`, `dice_rolls`) JSON serialization ile erisim kuruldu.
+- Mevcut `GameStateRepository` class'ina uyumluluk acisindan dokunulmadi.
+- Ilgili Moq testleri `src/TavlaJules.Engine.Tests/MySqlGameRepositoryTests.cs` altinda olusturuldu ve testler basariyla gecti.
