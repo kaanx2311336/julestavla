@@ -73,22 +73,40 @@ public sealed class TavlaAgentService
             var proposedPromptAlreadyImplemented = !string.IsNullOrWhiteSpace(proposedNextPrompt)
                 && IsPromptObjectiveImplemented(settings.ProjectFolder, proposedPromptObjectiveKey);
             var shouldStart = ExtractBool(completion.Content, "shouldStartNewJulesSession");
+            var trackedSessionBusy = IsTrackedSessionBusy(relevantSessionsOutput, trackedSessionIdAtStart, automation);
             var shouldStartNextImplementedPhase = settings.AutoContinueCompletedSessions
                 && automation.TrackedSessionCompleted
                 && automation.AlreadyApplied
                 && !automation.AutomationBlocked;
-            if (string.IsNullOrWhiteSpace(nextPrompt) && shouldStartNextImplementedPhase)
+            var shouldStartIdleRoadmapPhase = settings.AllowAutoJulesSessions
+                && settings.AutoContinueCompletedSessions
+                && !trackedSessionBusy
+                && !automation.TrackedSessionAwaitingInput
+                && !automation.AutomationBlocked;
+            var nextPromptSelectedByLocalRoadmap = !string.IsNullOrWhiteSpace(nextPrompt)
+                && !nextPrompt.Equals(proposedNextPrompt, StringComparison.Ordinal);
+            if (string.IsNullOrWhiteSpace(nextPrompt)
+                && (shouldStartNextImplementedPhase || shouldStartIdleRoadmapPhase))
             {
                 var completedObjectiveKey = ResolveSessionObjectiveKey(settings, relevantSessionsOutput, trackedSessionIdAtStart);
                 nextPrompt = BuildNextGameImprovementPrompt(settings, completedObjectiveKey);
                 if (!string.IsNullOrWhiteSpace(nextPrompt))
                 {
+                    nextPromptSelectedByLocalRoadmap = true;
                     events.Add(CreateEvent(
                         "next_game_phase_selected",
                         "info",
-                        "Completed hedef zaten uygulanmis oldugu icin lokal oyun yol haritasindan sonraki faz secildi.",
-                        new { completedObjectiveKey, nextObjectiveKey = BuildPromptObjectiveKey(nextPrompt) }));
+                        shouldStartNextImplementedPhase
+                            ? "Completed hedef zaten uygulanmis oldugu icin lokal oyun yol haritasindan sonraki faz secildi."
+                            : "OpenRouter yeni hedef vermedigi icin lokal oyun yol haritasi sonraki fazi secti.",
+                        new { completedObjectiveKey, nextObjectiveKey = BuildPromptObjectiveKey(nextPrompt), shouldStartNextImplementedPhase, shouldStartIdleRoadmapPhase }));
                 }
+            }
+
+            if (nextPromptSelectedByLocalRoadmap)
+            {
+                shouldStart = true;
+                completion = WithSelectedNextPrompt(completion, nextPrompt);
             }
 
             var shouldContinueCompletedSession = settings.AutoContinueCompletedSessions
@@ -108,8 +126,8 @@ public sealed class TavlaAgentService
             var promptObjectiveKey = BuildPromptObjectiveKey(promptToSend);
             var promptTargetAlreadyImplemented = !string.IsNullOrWhiteSpace(promptToSend)
                 && IsPromptObjectiveImplemented(settings.ProjectFolder, promptObjectiveKey);
-            var completionPromptAlreadyImplemented = promptTargetAlreadyImplemented || proposedPromptAlreadyImplemented;
-            var trackedSessionBusy = IsTrackedSessionBusy(relevantSessionsOutput, trackedSessionIdAtStart, automation);
+            var completionPromptAlreadyImplemented = promptTargetAlreadyImplemented
+                || (string.IsNullOrWhiteSpace(promptToSend) && proposedPromptAlreadyImplemented);
             var shouldContinueCompletedInPlace =
                 !shouldRecoverAwaitingInputSession
                 && (shouldContinueCompletedSession || shouldStartNextImplementedPhase)
@@ -1291,6 +1309,7 @@ public sealed class TavlaAgentService
         }
 
         proposedPrompt = CanonicalizeNextPrompt(settings, objectiveKey, proposedPrompt, events);
+        objectiveKey = BuildPromptObjectiveKey(proposedPrompt);
 
         var implemented = IsPromptObjectiveImplemented(settings.ProjectFolder, objectiveKey);
         var alreadyInJules = SessionsContainObjective(sessionsOutput, objectiveKey);
@@ -1344,6 +1363,29 @@ public sealed class TavlaAgentService
                 }));
 
             return loadSnapshotPrompt;
+        }
+
+        if (objectiveKey.StartsWith("app.", StringComparison.Ordinal)
+            || objectiveKey.StartsWith("online.", StringComparison.Ordinal))
+        {
+            var canonicalAppPrompt = BuildNextGameImprovementPrompt(settings, "data.mysql-integration");
+            if (!string.IsNullOrWhiteSpace(canonicalAppPrompt)
+                && !canonicalAppPrompt.Equals(proposedPrompt, StringComparison.Ordinal))
+            {
+                events.Add(CreateEvent(
+                    "next_prompt_canonicalized",
+                    "warning",
+                    "OpenRouter app/online hedefini lokal TavlaJules roadmap promptuna cevirdi.",
+                    new
+                    {
+                        objectiveKey,
+                        original = Trim(proposedPrompt, 700),
+                        canonical = Trim(canonicalAppPrompt, 700),
+                        canonicalKey = BuildPromptObjectiveKey(canonicalAppPrompt)
+                    }));
+
+                return canonicalAppPrompt;
+            }
         }
 
         if (!objectiveKey.Equals("data.mysql-game-persistence", StringComparison.Ordinal)
@@ -1520,6 +1562,95 @@ public sealed class TavlaAgentService
             """;
         }
 
+        if (!IsPromptObjectiveImplemented(settings.ProjectFolder, "app.game-board-skeleton"))
+        {
+            return $"""
+            Create the TavlaJules playable board skeleton phase for repo {settings.GitHubRepo}.
+
+            Target files:
+            - new `src/TavlaJules.App/Controls/GameBoardControl.cs`
+            - `src/TavlaJules.App/MainForm.cs` only for adding the new tab/control
+            - relevant `prodetayi/` summaries and one dated `yapilanlar/` note
+
+            Goal:
+            MySQL integration is complete. Start turning the WinForms control panel into a real tavla app by adding a separate local board tab without breaking the existing agent tabs.
+
+            Requirements:
+            - Add a new tab such as `Oyun Tahtasi` beside the existing roadmap/agent/prompt/log tabs.
+            - Render a stable 24-point board skeleton with bar, borne-off counters, dice/current-player labels, and buttons for New Game, Roll Dice, and Apply Move.
+            - Keep this phase UI-only/local-state only; do not add database calls, network calls, or new engine rules.
+            - Use existing WinForms styling patterns from `MainForm`; avoid a giant MainForm rewrite.
+            - Keep the patch around 100-500 lines and ensure `dotnet build` still succeeds.
+            - Do not include secrets, API keys, connection strings, or `.env` values.
+            """;
+        }
+
+        if (!IsPromptObjectiveImplemented(settings.ProjectFolder, "app.local-turn-flow"))
+        {
+            return $"""
+            Create the TavlaJules local turn flow phase for repo {settings.GitHubRepo}.
+
+            Target files:
+            - `src/TavlaJules.App/Controls/GameBoardControl.cs`
+            - optional small app-layer helper under `src/TavlaJules.App/Services/`
+            - focused tests if the existing test structure supports the changed logic
+            - relevant `prodetayi/` summaries and one dated `yapilanlar/` note
+
+            Goal:
+            The board tab exists. Wire it to the existing engine so a local user can start a game, roll dice, inspect legal moves, apply a selected move, and see the turn/log update.
+
+            Requirements:
+            - Use existing `GameEngine`, `Move`, `PlayerColor`, dice, snapshot, and legal move APIs; do not rewrite tavla rules in the UI.
+            - Keep `TavlaJules.Engine` pure and do not make it depend on App/Data.
+            - Add simple guarded UI states: no move before dice, disabled apply when no legal move is selected, and clear messages when a player has no move.
+            - Keep the patch around 100-500 lines and verify with `dotnet build` and existing tests.
+            - Do not include secrets, API keys, connection strings, or `.env` values.
+            """;
+        }
+
+        if (!IsPromptObjectiveImplemented(settings.ProjectFolder, "app.persistence-smoke-action"))
+        {
+            return $"""
+            Create the TavlaJules app persistence smoke-action phase for repo {settings.GitHubRepo}.
+
+            Target files:
+            - `src/TavlaJules.App/MainForm.cs` or `src/TavlaJules.App/Controls/GameBoardControl.cs`
+            - optional small app-layer helper under `src/TavlaJules.App/Services/`
+            - relevant `prodetayi/` summaries and one dated `yapilanlar/` note
+
+            Goal:
+            The board can run locally and the MySQL repository is wired. Add a small manual app action that proves save/load works without automatically writing on every UI tick.
+
+            Requirements:
+            - Add a visible action such as `Save Game` / `Load Last Snapshot` in the board tab or agent panel.
+            - Call the existing `GamePersistenceService` from the App layer to save a current `GameStateSnapshot` and load it back.
+            - Show success/failure in the existing log/status area; handle missing `TAVLA_ONLINE_MYSQL` gracefully.
+            - Do not add new schema, EF Core, Docker, or engine dependencies on Data.
+            - Keep the patch around 100-400 lines and ensure `dotnet build` still succeeds.
+            - Do not include secrets, API keys, connection strings, or `.env` values.
+            """;
+        }
+
+        if (!IsPromptObjectiveImplemented(settings.ProjectFolder, "online.match-schema"))
+        {
+            return $"""
+            Create the TavlaJules online match schema phase for repo {settings.GitHubRepo}.
+
+            Target files:
+            - new MySQL migration under `migrations/`
+            - relevant `prodetayi/` summaries and one dated `yapilanlar/` note
+
+            Goal:
+            Local play and persistence smoke checks are in place. Prepare the next online layer with small MySQL tables for match sessions and players.
+
+            Requirements:
+            - Add idempotent MySQL DDL for `online_matches` and `online_match_players`.
+            - Keep columns minimal: ids, status, created/updated timestamps, player ids/names, color assignment, and current snapshot id if available.
+            - Use MySQL-compatible SQL only; no PostgreSQL, JSONB, EF Core, Docker, or secrets.
+            - Keep the patch around 100-300 lines and do not touch engine rules.
+            """;
+        }
+
         return "";
     }
 
@@ -1555,6 +1686,26 @@ public sealed class TavlaAgentService
         }
 
         var normalized = NormalizeSessionDescription(prompt);
+        if (MentionsAppPersistenceSmokeAction(normalized))
+        {
+            return "app.persistence-smoke-action";
+        }
+
+        if (MentionsAppLocalTurnFlow(normalized))
+        {
+            return "app.local-turn-flow";
+        }
+
+        if (MentionsOnlineMatchSchema(normalized))
+        {
+            return "online.match-schema";
+        }
+
+        if (MentionsAppGameBoardSkeleton(normalized))
+        {
+            return "app.game-board-skeleton";
+        }
+
         if (MentionsMySqlIntegration(normalized))
         {
             return "data.mysql-integration";
@@ -1627,6 +1778,54 @@ public sealed class TavlaAgentService
         }
 
         return "";
+    }
+
+    private static bool MentionsAppGameBoardSkeleton(string normalized)
+    {
+        return normalized.Contains("gameboardcontrol", StringComparison.Ordinal)
+            || normalized.Contains("board skeleton", StringComparison.Ordinal)
+            || normalized.Contains("playable board", StringComparison.Ordinal)
+            || normalized.Contains("oyun tahtasi", StringComparison.Ordinal)
+            || normalized.Contains("board tab", StringComparison.Ordinal)
+            || (normalized.Contains("winforms", StringComparison.Ordinal)
+                && normalized.Contains("24-point", StringComparison.Ordinal))
+            || (normalized.Contains("local board", StringComparison.Ordinal)
+                && normalized.Contains("tab", StringComparison.Ordinal));
+    }
+
+    private static bool MentionsAppLocalTurnFlow(string normalized)
+    {
+        return normalized.Contains("local turn flow", StringComparison.Ordinal)
+            || normalized.Contains("apply a selected move", StringComparison.Ordinal)
+            || normalized.Contains("inspect legal moves", StringComparison.Ordinal)
+            || (normalized.Contains("gameboardcontrol", StringComparison.Ordinal)
+                && normalized.Contains("roll dice", StringComparison.Ordinal)
+                && normalized.Contains("legal moves", StringComparison.Ordinal))
+            || (normalized.Contains("board tab", StringComparison.Ordinal)
+                && normalized.Contains("gameengine", StringComparison.Ordinal)
+                && normalized.Contains("apply move", StringComparison.Ordinal));
+    }
+
+    private static bool MentionsAppPersistenceSmokeAction(string normalized)
+    {
+        return normalized.Contains("persistence smoke", StringComparison.Ordinal)
+            || normalized.Contains("save game", StringComparison.Ordinal)
+            || normalized.Contains("load last snapshot", StringComparison.Ordinal)
+            || (normalized.Contains("gamepersistenceservice", StringComparison.Ordinal)
+                && normalized.Contains("save", StringComparison.Ordinal)
+                && normalized.Contains("load", StringComparison.Ordinal))
+            || (normalized.Contains("board tab", StringComparison.Ordinal)
+                && normalized.Contains("save", StringComparison.Ordinal)
+                && normalized.Contains("snapshot", StringComparison.Ordinal));
+    }
+
+    private static bool MentionsOnlineMatchSchema(string normalized)
+    {
+        return normalized.Contains("online match schema", StringComparison.Ordinal)
+            || normalized.Contains("online_matches", StringComparison.Ordinal)
+            || normalized.Contains("online_match_players", StringComparison.Ordinal)
+            || (normalized.Contains("match sessions", StringComparison.Ordinal)
+                && normalized.Contains("mysql", StringComparison.Ordinal));
     }
 
     private static bool MentionsMySqlRepositoryLayer(string normalized)
@@ -1742,6 +1941,14 @@ public sealed class TavlaAgentService
                 && HasMySqlIntegrationLayer(projectFolder),
             "data.mysql-load-snapshot" =>
                 gameStateRepository.Contains("LoadSnapshotAsync", StringComparison.Ordinal),
+            "app.game-board-skeleton" =>
+                HasAppGameBoardSkeleton(projectFolder),
+            "app.local-turn-flow" =>
+                HasAppLocalTurnFlow(projectFolder),
+            "app.persistence-smoke-action" =>
+                HasAppPersistenceSmokeAction(projectFolder),
+            "online.match-schema" =>
+                HasOnlineMatchSchema(projectFolder),
             _ => false
         };
     }
@@ -1808,6 +2015,90 @@ public sealed class TavlaAgentService
             && (appCode.Contains("SaveSnapshotAsync", StringComparison.Ordinal)
                 || appCode.Contains("SaveMoveSequenceAsync", StringComparison.Ordinal)
                 || appCode.Contains("SaveDiceRollAsync", StringComparison.Ordinal));
+    }
+
+    private static bool HasAppGameBoardSkeleton(string projectFolder)
+    {
+        var controlCode = ReadBoardControlCode(projectFolder);
+        var mainFormPath = Path.Combine(projectFolder, "src", "TavlaJules.App", "MainForm.cs");
+        var mainForm = File.Exists(mainFormPath) ? File.ReadAllText(mainFormPath) : "";
+
+        return !string.IsNullOrWhiteSpace(controlCode)
+            && (controlCode.Contains("GameBoardControl", StringComparison.Ordinal)
+                || controlCode.Contains("BoardControl", StringComparison.Ordinal))
+            && (controlCode.Contains("24", StringComparison.Ordinal)
+                || controlCode.Contains("Point", StringComparison.Ordinal)
+                || controlCode.Contains("Bar", StringComparison.Ordinal))
+            && (mainForm.Contains("GameBoardControl", StringComparison.Ordinal)
+                || mainForm.Contains("BoardControl", StringComparison.Ordinal));
+    }
+
+    private static bool HasAppLocalTurnFlow(string projectFolder)
+    {
+        var controlCode = ReadBoardControlCode(projectFolder);
+        if (string.IsNullOrWhiteSpace(controlCode))
+        {
+            return false;
+        }
+
+        return controlCode.Contains("GameEngine", StringComparison.Ordinal)
+            && controlCode.Contains("RollDice", StringComparison.Ordinal)
+            && controlCode.Contains("GenerateLegalMoves", StringComparison.Ordinal)
+            && (controlCode.Contains("ApplyMove", StringComparison.Ordinal)
+                || controlCode.Contains("SelectedMove", StringComparison.Ordinal));
+    }
+
+    private static bool HasAppPersistenceSmokeAction(string projectFolder)
+    {
+        var mainFormPath = Path.Combine(projectFolder, "src", "TavlaJules.App", "MainForm.cs");
+        var mainForm = File.Exists(mainFormPath) ? File.ReadAllText(mainFormPath) : "";
+        var boardControl = ReadBoardControlCode(projectFolder);
+        var appUiCode = mainForm + Environment.NewLine + boardControl;
+
+        return appUiCode.Contains("GamePersistenceService", StringComparison.Ordinal)
+            && appUiCode.Contains("SaveSnapshotAsync", StringComparison.Ordinal)
+            && appUiCode.Contains("LoadSnapshotAsync", StringComparison.Ordinal)
+            && (appUiCode.Contains("Save Game", StringComparison.Ordinal)
+                || appUiCode.Contains("Load Last Snapshot", StringComparison.Ordinal)
+                || appUiCode.Contains("Kaydet", StringComparison.Ordinal));
+    }
+
+    private static string ReadBoardControlCode(string projectFolder)
+    {
+        var appRoot = Path.Combine(projectFolder, "src", "TavlaJules.App");
+        if (!Directory.Exists(appRoot))
+        {
+            return "";
+        }
+
+        var candidateNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "GameBoardControl.cs",
+            "BoardControl.cs"
+        };
+
+        return string.Join(
+            Environment.NewLine,
+            Directory.GetFiles(appRoot, "*.cs", SearchOption.AllDirectories)
+                .Where(file => candidateNames.Contains(Path.GetFileName(file))
+                    && !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                    && !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                .Select(File.ReadAllText));
+    }
+
+    private static bool HasOnlineMatchSchema(string projectFolder)
+    {
+        var migrationsPath = Path.Combine(projectFolder, "migrations");
+        if (!Directory.Exists(migrationsPath))
+        {
+            return false;
+        }
+
+        return Directory.GetFiles(migrationsPath, "*.sql", SearchOption.AllDirectories)
+            .Select(File.ReadAllText)
+            .Any(sql =>
+                sql.Contains("online_matches", StringComparison.OrdinalIgnoreCase)
+                && sql.Contains("online_match_players", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool HasMySqlPersistenceMigration(string projectFolder)
@@ -2023,7 +2314,11 @@ public sealed class TavlaAgentService
             ["mysqlSchema"] = IsPromptObjectiveImplemented(projectFolder, "data.mysql-schema") ? "done" : "missing",
             ["mysqlRepository"] = IsPromptObjectiveImplemented(projectFolder, "data.mysql-repository") ? "done" : "missing",
             ["mysqlIntegration"] = IsPromptObjectiveImplemented(projectFolder, "data.mysql-integration") ? "done" : "missing",
-            ["mysqlGamePersistence"] = IsPromptObjectiveImplemented(projectFolder, "data.mysql-game-persistence") ? "done" : "missing"
+            ["mysqlGamePersistence"] = IsPromptObjectiveImplemented(projectFolder, "data.mysql-game-persistence") ? "done" : "missing",
+            ["appGameBoardSkeleton"] = IsPromptObjectiveImplemented(projectFolder, "app.game-board-skeleton") ? "done" : "missing",
+            ["appLocalTurnFlow"] = IsPromptObjectiveImplemented(projectFolder, "app.local-turn-flow") ? "done" : "missing",
+            ["appPersistenceSmokeAction"] = IsPromptObjectiveImplemented(projectFolder, "app.persistence-smoke-action") ? "done" : "missing",
+            ["onlineMatchSchema"] = IsPromptObjectiveImplemented(projectFolder, "online.match-schema") ? "done" : "missing"
         };
 
         return string.Join(Environment.NewLine, checks.Select(item => $"{item.Key}={item.Value}"));
@@ -2041,7 +2336,8 @@ public sealed class TavlaAgentService
         Jules Awaiting User Feedback/Input durumundaysa bunu bekleyen soru olarak raporla; tavlajules bu durumda netlestirilmis kurtarma promptu uretebilir.
         Completed is apply/dogrulama/commit/push ile guvenli hale geldiyse nextPrompt bir sonraki kucuk faz olsun.
         Ayni methodu veya ayni hedefi farkli cumlelerle tekrar onerme. OYUN FAZ DURUMU icinde done gorunen hedefler icin nextPrompt yazma.
-        GenerateLegalMoves ve dice/turn isleri done ise sonraki dogru oyun fazi full-turn move sequence generation, sonra game state snapshot, sonra MySQL schema, sonra MySQL repository, sonra MySQL app integration olmalidir.
+        GenerateLegalMoves ve dice/turn isleri done ise sonraki dogru oyun fazi full-turn move sequence generation, sonra game state snapshot, sonra MySQL schema, sonra MySQL repository, sonra MySQL app integration, sonra WinForms board skeleton, local turn flow, persistence smoke action ve online match schema olmalidir.
+        MySQL integration dahil tum DB fazlari done ise nextPrompt null yazma; OYUN FAZ DURUMU icindeki ilk missing app/online fazini sec.
         nextPrompt mutlaka dosya/modul bazli, test/dogrulama beklentili, 100-500 satir bandinda ve mevcut prodetayi/yapilanlar disiplinine uygun olsun.
         Proje, kullanicinin daha once yaptigi Batak projesine benzer sekilde fazli, loglu, prodetayi hafizali ve Jules destekli ilerlemelidir.
         Batak yalnizca surec disiplini ornegidir; cevapta Batak, FAZ 95 veya baska eski proje icerigi yazma.
@@ -2414,6 +2710,43 @@ public sealed class TavlaAgentService
         };
     }
 
+    private static OpenRouterCompletionResult WithSelectedNextPrompt(OpenRouterCompletionResult completion, string nextPrompt)
+    {
+        var originalStatus = ExtractString(completion.Content, "statusSummary");
+        var originalWork = ExtractString(completion.Content, "whatJulesDid");
+        var originalPlan = ExtractString(completion.Content, "databasePlan");
+        var riskNotes = ExtractStringArray(completion.Content, "riskNotes");
+        if (riskNotes.Length == 0)
+        {
+            riskNotes =
+            [
+                "OpenRouter nextPrompt bos veya tamamlanmis geldiyse TavlaJules lokal roadmap ile sonraki fazi secer."
+            ];
+        }
+
+        var content = JsonSerializer.Serialize(new
+        {
+            statusSummary = string.IsNullOrWhiteSpace(originalStatus)
+                ? "TavlaJules lokal roadmap sonraki fazi secti."
+                : $"{originalStatus} TavlaJules lokal roadmap sonraki fazi secti.",
+            whatJulesDid = string.IsNullOrWhiteSpace(originalWork)
+                ? "Jules/yerel hafiza durumuna gore tamamlanan hedefler elendi ve yeni uygulanabilir faz belirlendi."
+                : originalWork,
+            nextPrompt,
+            shouldStartNewJulesSession = true,
+            databasePlan = string.IsNullOrWhiteSpace(originalPlan)
+                ? "DB fazlari tamamlandiysa siradaki is WinForms oyun akisi ve online fazlara gecmektir."
+                : originalPlan,
+            riskNotes
+        });
+
+        return new OpenRouterCompletionResult
+        {
+            Model = completion.Model,
+            Content = content
+        };
+    }
+
     private static void AddCommandLine(List<string> lines, string name, CommandResult? result)
     {
         if (result is null)
@@ -2436,6 +2769,30 @@ public sealed class TavlaAgentService
         {
             var match = Regex.Match(content, $@"""{propertyName}""\s*:\s*""(?<value>.*?)""", RegexOptions.Singleline);
             return match.Success ? Regex.Unescape(match.Groups["value"].Value) : "";
+        }
+    }
+
+    private static string[] ExtractStringArray(string content, string propertyName)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(content);
+            if (!document.RootElement.TryGetProperty(propertyName, out var value)
+                || value.ValueKind != JsonValueKind.Array)
+            {
+                return [];
+            }
+
+            return value
+                .EnumerateArray()
+                .Where(item => item.ValueKind == JsonValueKind.String)
+                .Select(item => item.GetString() ?? "")
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .ToArray();
+        }
+        catch
+        {
+            return [];
         }
     }
 

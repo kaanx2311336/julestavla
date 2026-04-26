@@ -1,0 +1,8 @@
+2026-04-26 - Post-MySQL otonomi roadmap duzeltmesi
+
+- TavlaAgentService icinde MySQL entegrasyonu tamamlandiktan sonra dongunun `nextPrompt:null` ile beklemede kalmasi engellendi.
+- Lokal deterministik roadmap'e siradaki oyun fazlari eklendi: WinForms oyun tahtasi iskeleti, lokal tur akisi, persistence smoke action ve online match schema.
+- OpenRouter bos veya tamamlanmis hedef dondurdugunde secilen lokal prompt artik SQL/JSON raporuna da yaziliyor.
+- Uygulanmis eski OpenRouter hedefi, yerine secilen yeni promptun yanlislikla susturulmasina neden olmayacak sekilde kontrol akisi duzeltildi.
+- App/online fazlari da kanoniklestirildi; OpenRouter farkli bir board control yolu onerirse ajan yine lokal roadmap hedeflerini ve tamamlanma kontrollerini kullanacak.
+- Boylece MySQL fazlari bittikten sonra ajan yeni Jules session baslatabilecek ve proje oyun UI/online fazlarina ilerleyebilecek.
