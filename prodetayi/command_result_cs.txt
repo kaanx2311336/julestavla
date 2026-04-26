@@ -3,3 +3,4 @@
 - `ExitCode`, `Output` ve `Error` alanlarini tutar.
 - `IsSuccess`, cikis kodu 0 ise true doner.
 - `JulesCliService` tarafindan Jules CLI sonucunu UI'a guvenli sekilde aktarmak icin kullanilir.
+- Jules CLI bazen patch apply hatasini stderr'e yazip exit code 0 dondurebildigi icin bu normalize islemi `JulesCliService` icinde yapilir; `CommandResult` sade tasiyici olarak kalir.

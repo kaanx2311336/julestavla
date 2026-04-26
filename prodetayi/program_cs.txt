@@ -6,3 +6,4 @@
 - `--db-setup` argumani verilirse WinForms acmadan Aiven `ajanlarim` SQL rapor semasini kurar/dogrular ve `tavlajules` icin setup run kaydi yazar.
 - `--agent-once` argumani verilirse WinForms acmadan tek TavlaAgentService turu calistirir ve sonucu SQL'e yazar.
 - Headless ajan turu yeni Jules session id olusturursa `%AppData%\TavlaJules\settings.json` icindeki `TrackedJulesSessionId` de guncellenir.
+- 2026-04-26 guncellemesiyle app katmani `TavlaJules.Data` projesine referans alir ve `.env` icindeki `TAVLA_ONLINE_MYSQL` / `AJANLARIM_MYSQL` degerinden `MySqlConnectionFactory` + `MySqlGameRepository` + `GamePersistenceService` zincirini kurabilir.

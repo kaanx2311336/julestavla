@@ -9,3 +9,4 @@
 - Bu sayede `Awaiting User Feedback` ve `Awaiting Plan Approval` durumlari web ekranina tiklamadan ayni Jules session icinde cevaplanabilir.
 - Komutlar proje klasoru calisma diziniyle calisir.
 - Standart cikti, hata cikisi ve exit code `CommandResult` olarak UI'a tasinir.
+- 2026-04-26 duzeltmesiyle Jules CLI exit code 0 verse bile `Failed to apply patch`, `error: patch failed` veya `error: exit status` gibi bilinen patch hata metinleri gorulurse `CommandResult.ExitCode` 1'e normalize edilir. Boylece ajan patch uygulanmadigi halde `AppliedThisTurn=true` yazmaz.

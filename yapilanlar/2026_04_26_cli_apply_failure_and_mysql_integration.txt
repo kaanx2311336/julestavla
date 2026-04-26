@@ -1,0 +1,16 @@
+2026-04-26 - Jules apply hata algisi ve MySQL app entegrasyonu
+
+Sorun:
+- `jules remote pull --apply` bazi patch hatalarinda exit code 0 donduruyor, ama stderr icinde `Failed to apply patch` yaziyordu.
+- Ajan bunu basarili sanip `Completed Jules patch'i apply edildi, dogrulandi.` raporu uretiyor, git calisma alani ise temiz kaliyor ve gercekte yeni dosyalar gelmiyordu.
+
+Yapilan:
+- `JulesCliService`, bilinen patch hata metinlerini yakalayip exit code'u 1'e normalize edecek sekilde guncellendi.
+- `TavlaJules.App` projesi `TavlaJules.Data` ve `TavlaJules.Engine` referanslarini aldi.
+- `MySqlConnectionFactory`, `.env` icinden `TAVLA_ONLINE_MYSQL` veya fallback olarak `AJANLARIM_MYSQL` okuyup `IDbConnectionFactory` saglar.
+- `GamePersistenceService`, app katmanindan `MySqlGameRepository` metotlarina erisim icin eklendi.
+- `Program.cs`, DB setup akisi icinde repository zincirinin kurulabilir oldugunu algilayacak hale getirildi.
+
+Sonuc:
+- Ajan artik apply edilmeyen Jules patch'ini basarili saymayacak.
+- `data.mysql-integration` hedefi lokal kodda gercek app-layer integration ile tamamlanmis kabul edilebilir.

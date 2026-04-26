@@ -12,4 +12,9 @@
     <PackageReference Include="MySqlConnector" Version="2.5.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\TavlaJules.Data\TavlaJules.Data.csproj" />
+    <ProjectReference Include="..\TavlaJules.Engine\TavlaJules.Engine.csproj" />
+  </ItemGroup>
+
 </Project>

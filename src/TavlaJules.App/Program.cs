@@ -27,6 +27,7 @@ static class Program
         var envFileService = new Services.EnvFileService();
         var connectionString = envFileService.GetValue(settings.ProjectFolder, "AJANLARIM_MYSQL")
             ?? envFileService.GetValue(settings.ProjectFolder, "TAVLA_ONLINE_MYSQL");
+        var gamePersistenceConfigured = CreateGamePersistenceService(settings, envFileService) is not null;
 
         var reporter = new Services.AgentSqlReporter();
         var now = DateTimeOffset.Now;
@@ -44,7 +45,9 @@ static class Program
             WhatJulesDid = "Bu kayit Jules gorevi degil, DB setup dogrulamasidir.",
             NextPrompt = "",
             ShouldStartNewJulesSession = false,
-            DatabasePlan = "agent_registry, agent_runs, agent_events ve agent_jules_sessions tablolarini kullan.",
+            DatabasePlan = gamePersistenceConfigured
+                ? "agent_registry tablolarina ek olarak tavla_online MySqlGameRepository app katmaninda hazir."
+                : "agent_registry, agent_runs, agent_events ve agent_jules_sessions tablolarini kullan.",
             RiskNotesJson = "[]",
             AnalysisJson = "{\"statusSummary\":\"tavlajules SQL rapor semasi hazirlandi.\"}",
             ErrorText = "",
@@ -102,5 +105,20 @@ static class Program
             Console.Error.WriteLine(exception.Message);
             return 1;
         }
+    }
+
+    private static Services.GamePersistenceService? CreateGamePersistenceService(
+        Models.ProjectSettings settings,
+        Services.EnvFileService envFileService)
+    {
+        if (!envFileService.HasValue(settings.ProjectFolder, "TAVLA_ONLINE_MYSQL")
+            && !envFileService.HasValue(settings.ProjectFolder, "AJANLARIM_MYSQL"))
+        {
+            return null;
+        }
+
+        var factory = new Services.MySqlConnectionFactory(settings, envFileService);
+        var repository = new Data.Repositories.MySqlGameRepository(factory);
+        return new Services.GamePersistenceService(repository);
     }
 }

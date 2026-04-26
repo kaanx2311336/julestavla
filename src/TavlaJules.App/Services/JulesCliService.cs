@@ -164,12 +164,39 @@ public sealed class JulesCliService
         var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
         await process.WaitForExitAsync(cancellationToken);
 
+        var output = await outputTask;
+        var error = await errorTask;
+
         return new CommandResult
         {
-            ExitCode = process.ExitCode,
-            Output = await outputTask,
-            Error = await errorTask
+            ExitCode = NormalizeJulesExitCode(process.ExitCode, output, error),
+            Output = output,
+            Error = error
         };
+    }
+
+    private static int NormalizeJulesExitCode(int exitCode, string output, string error)
+    {
+        if (exitCode != 0)
+        {
+            return exitCode;
+        }
+
+        var combined = $"{output}{Environment.NewLine}{error}";
+        if (ContainsKnownJulesFailure(combined))
+        {
+            return 1;
+        }
+
+        return exitCode;
+    }
+
+    private static bool ContainsKnownJulesFailure(string value)
+    {
+        return value.Contains("Error: Failed to apply patch", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Failed to apply patch", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("error: patch failed", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("error: exit status", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string Quote(string value)
