@@ -1,0 +1,1 @@
+Completed BoardControl UI for TavlaJules.App. Added WinForms UI representing 24 points, 2 bar areas, and dice display. Added XUnit tests verifying control initialization. Fixed test projects TargetFrameworks and UseWindowsForms settings for correct Linux compilation.
