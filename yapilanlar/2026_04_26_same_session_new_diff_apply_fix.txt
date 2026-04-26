@@ -1,0 +1,20 @@
+2026-04-26 - Ayni Jules session yeni diff apply kilidi duzeltildi
+
+Sorun:
+- TavlaJules tam otonom akista ayni completed Jules session altina yeni baglantili prompt yazabiliyordu.
+- Session id degismedigi icin onceki patch apply edildikten sonra `AppliedCompletedSessionIds` listesi yeni patch'i de "zaten apply edildi" saniyordu.
+- Bu nedenle Jules ekranda yeni diff ve "Ready for review" gosterse bile ajan her tur `Completed Jules session daha once apply edildi; tekrar uygulanmadi.` diyerek ilerlemeyi durduruyordu.
+
+Yapilan:
+- `TavlaAgentService.ProcessTrackedCompletedSessionAsync` icinde applied session kontrolu artik once `jules remote pull --session <id>` on izlemesi yapar.
+- Remote on izleme yeni `diff --git` iceriyor ve aktif hedef lokal kodda hala eksikse session yeniden acilir; applied kilidi kaldirilir ve normal apply/build/test/commit akisi devam eder.
+- Event kaydi `applied_session_has_new_diff_reopened` olarak changed files listesini raporlar.
+- Remote diff yok ama hedef eksikse onceki no-diff recovery davranisi korunur.
+
+Ek state duzeltmesi:
+- `AgentStateService.MarkCompletedSessionContinuedInPlace` ve `ReopenCompletedSessionObjective`, ayni session tekrar kullanildiginda input/plan approval cevap ve retry durumlarini temizler.
+- Boylece eski "plan onayi 3 kez denendi" veya "awaiting input cevaplandi" bilgisi session'in yeni nesil gorevini bloke etmez.
+
+Beklenen sonuc:
+- Jules session `8047373628936237459` gibi once repository patch'i apply edilmis, sonra integration patch'i uretmis olsa bile ajan yeni diff'i fark edip apply etmeyi dener.
+- Program ekranda "durdu" gibi gorunen durumlarda, hedef eksik + remote diff mevcut ise otonom akisi yeniden baslatir.

@@ -422,8 +422,23 @@ public sealed class TavlaAgentService
         {
             automation.JulesPullResult = await julesCliService.PullSessionAsync(settings, trackedSessionId, apply: false, cancellationToken);
             var alreadyAppliedHasDiff = HasJulesPatchDiff(automation.JulesPullResult);
-            if (!alreadyAppliedHasDiff
-                && !IsPromptObjectiveImplemented(settings.ProjectFolder, completedObjectiveKey))
+            var completedObjectiveImplemented = IsPromptObjectiveImplemented(settings.ProjectFolder, completedObjectiveKey);
+            if (alreadyAppliedHasDiff && !completedObjectiveImplemented)
+            {
+                agentStateService.ReopenCompletedSessionObjective(settings, trackedSessionId, completedObjectiveKey);
+                automation.AlreadyApplied = false;
+                events.Add(CreateEvent(
+                    "applied_session_has_new_diff_reopened",
+                    "warning",
+                    "Session daha once apply edilmis ama ayni session yeni diff uretti ve aktif hedef hala eksik; apply akisi yeniden acildi.",
+                    new
+                    {
+                        trackedSessionId,
+                        completedObjectiveKey,
+                        changedFiles = ExtractChangedFilesFromDiff(automation.JulesPullResult.Output)
+                    }));
+            }
+            else if (!alreadyAppliedHasDiff && !completedObjectiveImplemented)
             {
                 agentStateService.ReopenCompletedSessionObjective(settings, trackedSessionId, completedObjectiveKey);
                 automation.AlreadyApplied = false;
@@ -436,14 +451,24 @@ public sealed class TavlaAgentService
                     new { trackedSessionId, completedObjectiveKey }));
                 return automation;
             }
-
-            automation.AlreadyApplied = true;
-            automation.Summary = "Completed Jules session daha once apply edildi; tekrar uygulanmadi.";
-            events.Add(CreateEvent("jules_session_already_applied", "info", "Izlenen completed Jules session daha once apply edilmis.", new { trackedSessionId }));
-            return automation;
+            else
+            {
+                automation.AlreadyApplied = true;
+                automation.Summary = "Completed Jules session daha once apply edildi; tekrar uygulanmadi.";
+                events.Add(CreateEvent(
+                    "jules_session_already_applied",
+                    "info",
+                    "Izlenen completed Jules session daha once apply edilmis.",
+                    new { trackedSessionId, hasPreviewDiff = alreadyAppliedHasDiff, completedObjectiveKey, completedObjectiveImplemented }));
+                return automation;
+            }
         }
 
-        automation.JulesPullResult = await julesCliService.PullSessionAsync(settings, trackedSessionId, apply: false, cancellationToken);
+        if (automation.JulesPullResult is null)
+        {
+            automation.JulesPullResult = await julesCliService.PullSessionAsync(settings, trackedSessionId, apply: false, cancellationToken);
+        }
+
         var hasPreviewDiff = HasJulesPatchDiff(automation.JulesPullResult);
         if (!hasPreviewDiff)
         {

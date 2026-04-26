@@ -279,6 +279,7 @@ public sealed class AgentStateService
             state.PendingAppliedSessionId = "";
         }
 
+        ClearPerSessionInteractionState(state, sessionId);
         state.LastTrackedSessionId = sessionId;
         state.LastPromptSessionId = sessionId;
         state.UpdatedAt = DateTimeOffset.Now;
@@ -307,6 +308,7 @@ public sealed class AgentStateService
         }
 
         state.SessionObjectiveKeys.Remove(sessionId);
+        ClearPerSessionInteractionState(state, sessionId);
         state.LastTrackedSessionId = sessionId;
         state.LastPromptSessionId = sessionId;
         state.UpdatedAt = DateTimeOffset.Now;
@@ -370,6 +372,16 @@ public sealed class AgentStateService
         var path = GetPath(settings);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, JsonSerializer.Serialize(state, JsonOptions));
+    }
+
+    private static void ClearPerSessionInteractionState(AgentState state, string sessionId)
+    {
+        state.HandledAwaitingInputSessionIds.RemoveAll(item => item.Equals(sessionId, StringComparison.Ordinal));
+        state.AwaitingInputRecoverySessionIds.RemoveAll(item => item.Equals(sessionId, StringComparison.Ordinal));
+        state.RepliedAwaitingInputSessionIds.RemoveAll(item => item.Equals(sessionId, StringComparison.Ordinal));
+        state.ApprovedAwaitingPlanSessionIds.RemoveAll(item => item.Equals(sessionId, StringComparison.Ordinal));
+        state.AwaitingPlanApprovalSentAt.Remove(sessionId);
+        state.AwaitingPlanApprovalAttemptCounts.Remove(sessionId);
     }
 
     private static string GetPath(ProjectSettings settings)
