@@ -19,6 +19,7 @@ public sealed class AgentAutomationArtifacts
     public bool CompletedSessionContinuedInPlace { get; set; }
     public bool CompletedSessionOpenedNewSession { get; set; }
     public bool CompletedContinuationRelated { get; set; }
+    public bool NoDiffObjectiveReopened { get; set; }
     public bool AutomationBlocked { get; set; }
     public string Summary { get; set; } = "";
     public string DuplicateOfSessionId { get; set; } = "";

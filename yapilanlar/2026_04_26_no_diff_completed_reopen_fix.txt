@@ -1,0 +1,16 @@
+2026-04-26 - No-diff completed session kilidi duzeltildi
+
+Sorun:
+- Jules session `8047373628936237459` Completed durumuna gecti ancak `jules remote pull` cikisi `No diff found in the remote VM.` idi.
+- TavlaJules, `jules remote pull --apply` komutunun exit code 0 donmesini gercek patch apply edilmis gibi yorumladi ve session id'yi `AppliedCompletedSessionIds` listesine yazdi.
+- Bu nedenle sonraki dakikalik turlarda hedef `data.mysql-repository` hala eksik oldugu halde ajan `Completed Jules session daha once apply edildi; tekrar uygulanmadi.` diyerek ayni yerde kaldi.
+
+Yapilan:
+- Completed session icin once preview diff kontrolu zorunlu hale getirildi.
+- Remote diff yoksa ve hedef lokal kodda uygulanmamis gorunuyorsa session apply edilmis sayilmiyor.
+- Daha once yanlislikla applied listesine girmis no-diff sessionlar icin `ReopenCompletedSessionObjective` eklendi; handled/applied/objective kilitleri temizlenip ayni hedef yeniden gorevlendirilebilir hale getirildi.
+- No-diff recovery sirasinda eski prompt hash'i ayni metni tekrar engellese bile, hedef eksik ve ayni completed session devam ettiriliyorsa retry'e izin veriliyor.
+
+Dogrulama beklentisi:
+- `No diff found` donen completed session artik applied sayilmaz.
+- `data.mysql-repository` eksikse ajan ayni completed session altina veya yeni session'a net repository promptu gondererek donguye devam eder.

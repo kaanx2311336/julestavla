@@ -10,6 +10,7 @@
 - `AwaitingPlanApprovalSent`, Jules plan onayi bekliyorsa ayni session'a onay cevabi gonderildigini gosterir.
 - `AwaitingPlanApprovalAlreadySent`, `AwaitingPlanApprovalRetryDue` ve `TrackedSessionAwaitingPlanApproval`, plan onayi tekrar deneme/no-op completed kararlarini JSON/SQL/dashboard raporlarinda gorunur yapar.
 - `CompletedSessionContinuedInPlace`, `CompletedSessionOpenedNewSession`, `CompletedContinuationRelated` ve `CompletedContinuationResult`, completed sonrasi promptun ayni Jules session altina mi yazildigini yoksa yeni session mi acildigini raporlar.
+- `NoDiffObjectiveReopened`, completed session `No diff found` dondugu halde hedef eksik kaldiginda eski duplicate/prompt kilidinin bu tur icin asildigini belirtir.
 - `AwaitingInputSessionIds`, `AwaitingPlanSessionIds`, `AwaitingInputReplyResults` ve `AwaitingPlanApprovalResults`, cevaplanan sessionlari ve sonuc komutlarini JSON/SQL/dashboard icin saklar.
 - `JulesPullResult` ve `JulesApplyResult`, Jules CLI pull/apply ciktilarini saklar.
 - `VerificationBuildResult` ve `VerificationTestResult`, apply sonrasi `dotnet build` ve `dotnet test` sonucunu saklar.

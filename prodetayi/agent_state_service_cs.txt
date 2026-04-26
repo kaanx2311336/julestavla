@@ -20,6 +20,7 @@
 - `ShouldRetryAwaitingPlanApproval`, daha once onaylanan ama hala Awaiting Plan Approval gorunen session icin retry araligi ve maksimum deneme sayisini kontrol eder.
 - `MarkCompletedSessionHandled`, completed session'i isaretler ve okunabilirse yeni takip id'sini `LastTrackedSessionId` alanina yazar.
 - `MarkCompletedSessionContinuedInPlace`, baglantili prompt ayni completed session altina yazildiginda eski handled/applied kaydini temizler ve ayni session'i tekrar izlenebilir hale getirir.
+- `ReopenCompletedSessionObjective`, completed session applied sanildigi halde remote diff yoksa ve hedef hala eksikse handled/applied/objective kilitlerini temizler; boylece ayni hedef yeniden Jules'e gonderilebilir.
 - `MarkCompletedSessionApplied`, completed session patch'inin tekrar uygulanmasini engellemek icin session id'yi apply listesine ekler.
 - `MarkPromptSent`, yeni Jules session basarili acildiginda prompt hash'ini kaydeder.
 - `ForgetPromptSent`, Jules session yanlis hedef dosyalara patch urettiginde ilgili prompt hash/objective/session map kaydini temizler; ayni hedef dogru dosya sinirlariyla yeniden gorevlendirilebilir.

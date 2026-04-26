@@ -285,6 +285,34 @@ public sealed class AgentStateService
         Save(settings, state);
     }
 
+    public void ReopenCompletedSessionObjective(ProjectSettings settings, string sessionId, string objectiveKey)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        var state = Load(settings);
+        state.HandledCompletedSessionIds.RemoveAll(item => item.Equals(sessionId, StringComparison.Ordinal));
+        state.AppliedCompletedSessionIds.RemoveAll(item => item.Equals(sessionId, StringComparison.Ordinal));
+
+        if (state.PendingAppliedSessionId.Equals(sessionId, StringComparison.Ordinal))
+        {
+            state.PendingAppliedSessionId = "";
+        }
+
+        if (!string.IsNullOrWhiteSpace(objectiveKey))
+        {
+            state.SentPromptObjectiveKeys.RemoveAll(item => item.Equals(objectiveKey, StringComparison.Ordinal));
+        }
+
+        state.SessionObjectiveKeys.Remove(sessionId);
+        state.LastTrackedSessionId = sessionId;
+        state.LastPromptSessionId = sessionId;
+        state.UpdatedAt = DateTimeOffset.Now;
+        Save(settings, state);
+    }
+
     public void MarkCompletedSessionApplied(ProjectSettings settings, string sessionId)
     {
         var state = Load(settings);

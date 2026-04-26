@@ -123,116 +123,133 @@ public sealed class TavlaAgentService
                         "Onerilen Jules prompt hedefi mevcut kodda uygulanmis gorundugu icin yeni session acilmadi.",
                         new { promptObjectiveKey, prompt = Trim(promptToSend, 700) }));
                 }
-                else if (agentStateService.HasSentPrompt(settings, promptToSend)
-                    || agentStateService.HasSentPromptObjective(settings, promptObjectiveKey)
-                    || SessionsContainObjective(relevantSessionsOutput, promptObjectiveKey))
-                {
-                    if (shouldRecoverAwaitingInputSession)
-                    {
-                        newJulesSessionId = agentStateService.GetLastPromptSessionId(settings);
-                        agentStateService.MarkAwaitingInputSessionHandled(settings, trackedSessionIdAtStart, newJulesSessionId);
-
-                        if (!string.IsNullOrWhiteSpace(newJulesSessionId))
-                        {
-                            settings.TrackedJulesSessionId = newJulesSessionId;
-                        }
-                    }
-
-                    events.Add(CreateEvent(
-                        "duplicate_next_prompt_skipped",
-                        "warning",
-                        "Ayni Jules prompt hedefi daha once gonderildigi veya Jules listesinde bulundugu icin yeni session acilmadi.",
-                        new { trackedSessionIdAtStart, shouldRecoverAwaitingInputSession, promptObjectiveKey }));
-                }
                 else
                 {
-                    if (shouldContinueCompletedInPlace)
+                    var canRetryNoDiffCompletedObjective = automation.NoDiffObjectiveReopened
+                        && shouldContinueCompletedSession
+                        && ObjectiveKeysMatch(completedObjectiveKeyAtStart, promptObjectiveKey);
+                    var duplicatePromptTarget = agentStateService.HasSentPrompt(settings, promptToSend)
+                        || agentStateService.HasSentPromptObjective(settings, promptObjectiveKey)
+                        || SessionsContainObjective(relevantSessionsOutput, promptObjectiveKey);
+
+                    if (duplicatePromptTarget && !canRetryNoDiffCompletedObjective)
                     {
-                        autoResult = await julesCliService.ReplyToSessionAsync(settings, trackedSessionIdAtStart, BuildCompletedSessionContinuationPrompt(promptToSend), cancellationToken);
-                        automation.CompletedContinuationResult = autoResult;
-                        newJulesSessionId = autoResult.IsSuccess ? trackedSessionIdAtStart : "";
+                        if (shouldRecoverAwaitingInputSession)
+                        {
+                            newJulesSessionId = agentStateService.GetLastPromptSessionId(settings);
+                            agentStateService.MarkAwaitingInputSessionHandled(settings, trackedSessionIdAtStart, newJulesSessionId);
+
+                            if (!string.IsNullOrWhiteSpace(newJulesSessionId))
+                            {
+                                settings.TrackedJulesSessionId = newJulesSessionId;
+                            }
+                        }
+
+                        events.Add(CreateEvent(
+                            "duplicate_next_prompt_skipped",
+                            "warning",
+                            "Ayni Jules prompt hedefi daha once gonderildigi veya Jules listesinde bulundugu icin yeni session acilmadi.",
+                            new { trackedSessionIdAtStart, shouldRecoverAwaitingInputSession, promptObjectiveKey }));
                     }
                     else
                     {
-                        autoResult = await julesCliService.CreateSessionAsync(settings, promptToSend, cancellationToken);
-                        newJulesSessionId = AgentStateService.ParseSessionId(autoResult);
-                    }
-
-                    if (autoResult.IsSuccess)
-                    {
-                        agentStateService.MarkPromptSent(settings, promptToSend, newJulesSessionId, promptObjectiveKey);
-                    }
-
-                    if (autoResult.IsSuccess && shouldRecoverAwaitingInputSession)
-                    {
-                        automation.AwaitingInputRecoveryStarted = true;
-                        agentStateService.MarkAwaitingInputSessionHandled(settings, trackedSessionIdAtStart, newJulesSessionId);
-                        agentStateService.MarkAwaitingInputRecoverySession(settings, newJulesSessionId);
-
-                        if (!string.IsNullOrWhiteSpace(newJulesSessionId))
+                        if (duplicatePromptTarget && canRetryNoDiffCompletedObjective)
                         {
-                            settings.TrackedJulesSessionId = newJulesSessionId;
+                            events.Add(CreateEvent(
+                                "no_diff_duplicate_prompt_retry_allowed",
+                                "warning",
+                                "No-diff completed session hedefi eksik kaldigi icin eski prompt hash'i retry'i engellemeyecek.",
+                                new { trackedSessionIdAtStart, completedObjectiveKeyAtStart, promptObjectiveKey }));
                         }
-                    }
 
-                    if (autoResult.IsSuccess && shouldContinueCompletedSession)
-                    {
                         if (shouldContinueCompletedInPlace)
                         {
-                            automation.CompletedSessionContinuedInPlace = true;
-                            automation.CompletedContinuationRelated = true;
-                            agentStateService.MarkCompletedSessionContinuedInPlace(settings, trackedSessionIdAtStart);
+                            autoResult = await julesCliService.ReplyToSessionAsync(settings, trackedSessionIdAtStart, BuildCompletedSessionContinuationPrompt(promptToSend), cancellationToken);
+                            automation.CompletedContinuationResult = autoResult;
+                            newJulesSessionId = autoResult.IsSuccess ? trackedSessionIdAtStart : "";
                         }
                         else
                         {
-                            automation.CompletedSessionOpenedNewSession = true;
-                            agentStateService.MarkCompletedSessionHandled(settings, trackedSessionIdAtStart, newJulesSessionId);
+                            autoResult = await julesCliService.CreateSessionAsync(settings, promptToSend, cancellationToken);
+                            newJulesSessionId = AgentStateService.ParseSessionId(autoResult);
                         }
 
-                        if (!string.IsNullOrWhiteSpace(newJulesSessionId))
+                        if (autoResult.IsSuccess)
                         {
-                            settings.TrackedJulesSessionId = newJulesSessionId;
-                        }
-                    }
-
-                    if (autoResult.IsSuccess && shouldStartNextImplementedPhase)
-                    {
-                        if (shouldContinueCompletedInPlace)
-                        {
-                            automation.CompletedSessionContinuedInPlace = true;
-                            automation.CompletedContinuationRelated = true;
-                            agentStateService.MarkCompletedSessionContinuedInPlace(settings, trackedSessionIdAtStart);
-                        }
-                        else
-                        {
-                            automation.CompletedSessionOpenedNewSession = true;
-                            agentStateService.MarkCompletedSessionHandled(settings, trackedSessionIdAtStart, newJulesSessionId);
+                            agentStateService.MarkPromptSent(settings, promptToSend, newJulesSessionId, promptObjectiveKey);
                         }
 
-                        if (!string.IsNullOrWhiteSpace(newJulesSessionId))
+                        if (autoResult.IsSuccess && shouldRecoverAwaitingInputSession)
                         {
-                            settings.TrackedJulesSessionId = newJulesSessionId;
-                        }
-                    }
+                            automation.AwaitingInputRecoveryStarted = true;
+                            agentStateService.MarkAwaitingInputSessionHandled(settings, trackedSessionIdAtStart, newJulesSessionId);
+                            agentStateService.MarkAwaitingInputRecoverySession(settings, newJulesSessionId);
 
-                    events.Add(CreateEvent(
-                        shouldContinueCompletedInPlace ? "completed_jules_session_continued_in_place" : "auto_jules_session_created",
-                        autoResult.IsSuccess ? "info" : "error",
-                        shouldContinueCompletedInPlace
-                            ? "Ajan baglantili promptu completed Jules session'in altina yazdi."
-                            : "Ajan otomatik yeni Jules session denemesi yapti.",
-                        new
+                            if (!string.IsNullOrWhiteSpace(newJulesSessionId))
+                            {
+                                settings.TrackedJulesSessionId = newJulesSessionId;
+                            }
+                        }
+
+                        if (autoResult.IsSuccess && shouldContinueCompletedSession)
                         {
-                            autoResult.ExitCode,
-                            continuedFromSessionId = trackedSessionIdAtStart,
-                            newJulesSessionId,
-                            completedObjectiveKeyAtStart,
-                            promptObjectiveKey,
-                            shouldContinueCompletedSession,
-                            shouldRecoverAwaitingInputSession,
-                            shouldStartNextImplementedPhase,
+                            if (shouldContinueCompletedInPlace)
+                            {
+                                automation.CompletedSessionContinuedInPlace = true;
+                                automation.CompletedContinuationRelated = true;
+                                agentStateService.MarkCompletedSessionContinuedInPlace(settings, trackedSessionIdAtStart);
+                            }
+                            else
+                            {
+                                automation.CompletedSessionOpenedNewSession = true;
+                                agentStateService.MarkCompletedSessionHandled(settings, trackedSessionIdAtStart, newJulesSessionId);
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(newJulesSessionId))
+                            {
+                                settings.TrackedJulesSessionId = newJulesSessionId;
+                            }
+                        }
+
+                        if (autoResult.IsSuccess && shouldStartNextImplementedPhase)
+                        {
+                            if (shouldContinueCompletedInPlace)
+                            {
+                                automation.CompletedSessionContinuedInPlace = true;
+                                automation.CompletedContinuationRelated = true;
+                                agentStateService.MarkCompletedSessionContinuedInPlace(settings, trackedSessionIdAtStart);
+                            }
+                            else
+                            {
+                                automation.CompletedSessionOpenedNewSession = true;
+                                agentStateService.MarkCompletedSessionHandled(settings, trackedSessionIdAtStart, newJulesSessionId);
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(newJulesSessionId))
+                            {
+                                settings.TrackedJulesSessionId = newJulesSessionId;
+                            }
+                        }
+
+                        events.Add(CreateEvent(
+                            shouldContinueCompletedInPlace ? "completed_jules_session_continued_in_place" : "auto_jules_session_created",
+                            autoResult.IsSuccess ? "info" : "error",
                             shouldContinueCompletedInPlace
-                        }));
+                                ? "Ajan baglantili promptu completed Jules session'in altina yazdi."
+                                : "Ajan otomatik yeni Jules session denemesi yapti.",
+                            new
+                            {
+                                autoResult.ExitCode,
+                                continuedFromSessionId = trackedSessionIdAtStart,
+                                newJulesSessionId,
+                                completedObjectiveKeyAtStart,
+                                promptObjectiveKey,
+                                shouldContinueCompletedSession,
+                                shouldRecoverAwaitingInputSession,
+                                shouldStartNextImplementedPhase,
+                                shouldContinueCompletedInPlace
+                            }));
+                    }
                 }
             }
             else if (automation.TrackedSessionAwaitingInput)
@@ -392,19 +409,6 @@ public sealed class TavlaAgentService
         }
 
         var completedObjectiveKey = trackedObjectiveKey;
-        if (IsPromptObjectiveImplemented(settings.ProjectFolder, completedObjectiveKey))
-        {
-            automation.AlreadyApplied = true;
-            automation.DuplicateCompletedSession = true;
-            automation.Summary = $"Completed Jules session hedefi ({completedObjectiveKey}) mevcut kodda zaten uygulanmis; patch pull/apply edilmeyecek.";
-            agentStateService.MarkCompletedSessionHandled(settings, trackedSessionId, trackedSessionId);
-            events.Add(CreateEvent(
-                "completed_objective_already_implemented",
-                "warning",
-                "Completed Jules session hedefi mevcut kodda zaten uygulandigi icin pull/apply atlandi.",
-                new { trackedSessionId, completedObjectiveKey }));
-            return automation;
-        }
 
         if (!settings.AutoApplyCompletedSessionPatch)
         {
@@ -416,8 +420,24 @@ public sealed class TavlaAgentService
 
         if (agentStateService.HasAppliedCompletedSession(settings, trackedSessionId))
         {
-            automation.AlreadyApplied = true;
             automation.JulesPullResult = await julesCliService.PullSessionAsync(settings, trackedSessionId, apply: false, cancellationToken);
+            var alreadyAppliedHasDiff = HasJulesPatchDiff(automation.JulesPullResult);
+            if (!alreadyAppliedHasDiff
+                && !IsPromptObjectiveImplemented(settings.ProjectFolder, completedObjectiveKey))
+            {
+                agentStateService.ReopenCompletedSessionObjective(settings, trackedSessionId, completedObjectiveKey);
+                automation.AlreadyApplied = false;
+                automation.NoDiffObjectiveReopened = true;
+                automation.Summary = $"Completed Jules session {trackedSessionId} daha once apply edildi saniliyordu ama remote diff yok ve hedef ({completedObjectiveKey}) hala eksik; hedef yeniden gorevlendirilecek.";
+                events.Add(CreateEvent(
+                    "applied_session_without_diff_reopened",
+                    "warning",
+                    "Session applied listesinde ama remote diff yok ve hedef eksik; applied/duplicate kilidi kaldirildi.",
+                    new { trackedSessionId, completedObjectiveKey }));
+                return automation;
+            }
+
+            automation.AlreadyApplied = true;
             automation.Summary = "Completed Jules session daha once apply edildi; tekrar uygulanmadi.";
             events.Add(CreateEvent("jules_session_already_applied", "info", "Izlenen completed Jules session daha once apply edilmis.", new { trackedSessionId }));
             return automation;
@@ -425,6 +445,33 @@ public sealed class TavlaAgentService
 
         automation.JulesPullResult = await julesCliService.PullSessionAsync(settings, trackedSessionId, apply: false, cancellationToken);
         var hasPreviewDiff = HasJulesPatchDiff(automation.JulesPullResult);
+        if (!hasPreviewDiff)
+        {
+            if (IsPromptObjectiveImplemented(settings.ProjectFolder, completedObjectiveKey))
+            {
+                automation.AlreadyApplied = true;
+                automation.DuplicateCompletedSession = true;
+                automation.Summary = $"Completed Jules session hedefi ({completedObjectiveKey}) mevcut kodda zaten uygulanmis ve remote diff yok; no-op tamam kabul edildi.";
+                agentStateService.MarkCompletedSessionHandled(settings, trackedSessionId, trackedSessionId);
+                events.Add(CreateEvent(
+                    "completed_no_diff_objective_already_implemented",
+                    "info",
+                    "Completed Jules session diff uretmedi ama hedef lokal kodda zaten mevcut.",
+                    new { trackedSessionId, completedObjectiveKey }));
+                return automation;
+            }
+
+            agentStateService.ReopenCompletedSessionObjective(settings, trackedSessionId, completedObjectiveKey);
+            automation.NoDiffObjectiveReopened = true;
+            automation.Summary = $"Completed Jules session {trackedSessionId} diff uretmedi ve hedef ({completedObjectiveKey}) hala eksik; ajan ayni hedefi yeniden netlestirip devam ettirecek.";
+            events.Add(CreateEvent(
+                "completed_no_diff_objective_missing",
+                "warning",
+                "Completed Jules session remote diff uretmedi ve hedef eksik; apply basarili sayilmayacak, prompt kilidi kaldirilacak.",
+                new { trackedSessionId, completedObjectiveKey }));
+            return automation;
+        }
+
         if (TryFindDuplicateCompletedSession(settings, sessionsOutput, trackedSessionId, out var duplicateOfSessionId))
         {
             var duplicateWasApplied = agentStateService.HasAppliedCompletedSession(settings, duplicateOfSessionId);
