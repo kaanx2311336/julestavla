@@ -1,1 +1,11 @@
-GameBoardControl represents the main game board UI. Contains 24 point panels, 2 bar area panels for captured checkers, 2 borne-off area panels, 1 dice display panel, and control buttons (New Game, Roll Dice, Apply Move). Inherits from UserControl.
+Summarizes the `GameBoardControl` class located at `src/TavlaJules.App/Controls/GameBoardControl.cs`.
+
+*   **Purpose:** The visual representation of the Tavla game board and user interactions.
+*   **Key Components:**
+    *   Holds the `GameEngine` instance and tracks local state like `_legalMoves`, `_selectedSourcePoint`, and `_selectedMove`.
+    *   Renders the board points (1-24), the bars, and the borne-off areas using Windows Forms `Panel` controls.
+    *   `StartNewGame()` initializes the game engine.
+    *   `RollDice()` calls the engine to roll and generate legal moves, advancing turn automatically if no moves are possible.
+    *   Click handlers on points, bars, and borne-off areas enable move selection and highlighting.
+    *   `ApplySelectedMove()` attempts to execute the `_selectedMove` against the engine.
+    *   `UpdateUiState()` and `RenderBoard()` synchronize the visual layout with the `GameStateSnapshot` captured from the engine.
