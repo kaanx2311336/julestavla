@@ -69,6 +69,9 @@ public sealed class TavlaAgentService
 
             var proposedNextPrompt = ExtractString(completion.Content, "nextPrompt");
             var nextPrompt = SelectNextPrompt(settings, proposedNextPrompt, relevantSessionsOutput, events);
+            var proposedPromptObjectiveKey = BuildPromptObjectiveKey(proposedNextPrompt);
+            var proposedPromptAlreadyImplemented = !string.IsNullOrWhiteSpace(proposedNextPrompt)
+                && IsPromptObjectiveImplemented(settings.ProjectFolder, proposedPromptObjectiveKey);
             var shouldStart = ExtractBool(completion.Content, "shouldStartNewJulesSession");
             var shouldStartNextImplementedPhase = settings.AutoContinueCompletedSessions
                 && automation.TrackedSessionCompleted
@@ -105,6 +108,7 @@ public sealed class TavlaAgentService
             var promptObjectiveKey = BuildPromptObjectiveKey(promptToSend);
             var promptTargetAlreadyImplemented = !string.IsNullOrWhiteSpace(promptToSend)
                 && IsPromptObjectiveImplemented(settings.ProjectFolder, promptObjectiveKey);
+            var completionPromptAlreadyImplemented = promptTargetAlreadyImplemented || proposedPromptAlreadyImplemented;
             var trackedSessionBusy = IsTrackedSessionBusy(relevantSessionsOutput, trackedSessionIdAtStart, automation);
             var shouldContinueCompletedInPlace =
                 !shouldRecoverAwaitingInputSession
@@ -112,15 +116,21 @@ public sealed class TavlaAgentService
                 && ShouldContinueCompletedSessionInPlace(completedObjectiveKeyAtStart, promptObjectiveKey, promptToSend);
             CommandResult? autoResult = null;
             var newJulesSessionId = "";
-            var implementedPromptSkippedObjectiveKey = promptTargetAlreadyImplemented ? promptObjectiveKey : "";
+            var implementedPromptSkippedObjectiveKey = completionPromptAlreadyImplemented
+                ? (!string.IsNullOrWhiteSpace(promptObjectiveKey) ? promptObjectiveKey : proposedPromptObjectiveKey)
+                : "";
 
-            if (promptTargetAlreadyImplemented)
+            if (completionPromptAlreadyImplemented)
             {
                 events.Add(CreateEvent(
                     "implemented_next_prompt_skipped",
                     "warning",
                     "Onerilen Jules prompt hedefi mevcut kodda uygulanmis gorundugu icin yeni session acilmadi.",
-                    new { promptObjectiveKey, prompt = Trim(promptToSend, 700) }));
+                    new
+                    {
+                        promptObjectiveKey = implementedPromptSkippedObjectiveKey,
+                        prompt = Trim(!string.IsNullOrWhiteSpace(promptToSend) ? promptToSend : proposedNextPrompt, 700)
+                    }));
             }
             else if (!trackedSessionBusy
                 && (shouldRecoverAwaitingInputSession || (settings.AllowAutoJulesSessions && shouldStart) || shouldContinueCompletedSession || shouldStartNextImplementedPhase)

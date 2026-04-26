@@ -13,3 +13,4 @@ Sonuc:
 
 Ek duzeltme:
 - Koruma yalnizca otomatik session acma denemesi yapilacakken degil, OpenRouter `shouldStartNewJulesSession=false` donse bile calisir. Boylece rapor/sqlde pasif halde bekleyen yanlis `nextPrompt` de birikmez.
+- `SelectNextPrompt` ic akista oneriyi bosaltsa bile ham OpenRouter `proposedNextPrompt` ayrica kontrol edilir; lokal hedef zaten tamamlanmissa rapor oncesi yine temizlenir.
