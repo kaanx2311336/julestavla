@@ -1,0 +1,19 @@
+2026-04-26 - MySQL integration roadmap takilmasi duzeltildi
+
+Sorun:
+- Jules `MySqlGameRepository` class'ini ekledikten sonra OpenRouter dogru sekilde "repository uygulamaya baglanmamis" raporu uretiyordu.
+- TavlaJules ajaninda bu adim hala `data.mysql-repository` olarak siniflandigi icin hedef tamamlanmis gorunuyor, `nextPrompt` hazirlansa bile otomatik session/feedback akisi susuyordu.
+- OpenRouter'in ham onerisi ayrica `appsettings.json`, DI container ve `GameEngine` constructor injection gibi mevcut repo mimarisine tam uymayan detaylar icerebiliyordu.
+
+Yapilan:
+- MySQL persistence yol haritasi uc alt faza ayrildi:
+  - `data.mysql-schema`: migration ve MySqlConnector bagimliligi.
+  - `data.mysql-repository`: repository class ve async SQL metotlari.
+  - `data.mysql-integration`: WinForms app katmaninda connection factory, repo referansi ve persistence kullanim wiring'i.
+- `BuildPromptObjectiveKey`, "integrate/wire/connection factory/Program.cs/not wired" gibi sinyalleri `data.mysql-integration` olarak siniflandirir.
+- `BuildNextGameImprovementPrompt`, entegrasyon icin repo uyumlu kanonik prompt uretir: Engine'i Data'ya baglama, `.env` uzerinden `TAVLA_ONLINE_MYSQL` oku, yeni DI framework/appsettings zorunlu kilma.
+- `data.mysql-game-persistence` artik schema + repository + integration tamamlanmadan done sayilmaz.
+
+Dogrulama beklentisi:
+- Repository class mevcut ama app wiring eksikse `mysqlRepository=done`, `mysqlIntegration=missing` gorunmeli.
+- Ajan completed repository session altina veya yeni session'a otomatik entegrasyon promptu gonderebilmelidir.
