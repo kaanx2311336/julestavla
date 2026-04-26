@@ -110,6 +110,7 @@ public sealed class TavlaAgentService
                 && ShouldContinueCompletedSessionInPlace(completedObjectiveKeyAtStart, promptObjectiveKey, promptToSend);
             CommandResult? autoResult = null;
             var newJulesSessionId = "";
+            var implementedPromptSkippedObjectiveKey = "";
 
             if (!trackedSessionBusy
                 && (shouldRecoverAwaitingInputSession || (settings.AllowAutoJulesSessions && shouldStart) || shouldContinueCompletedSession || shouldStartNextImplementedPhase)
@@ -117,6 +118,7 @@ public sealed class TavlaAgentService
             {
                 if (IsPromptObjectiveImplemented(settings.ProjectFolder, promptObjectiveKey))
                 {
+                    implementedPromptSkippedObjectiveKey = promptObjectiveKey;
                     events.Add(CreateEvent(
                         "implemented_next_prompt_skipped",
                         "warning",
@@ -281,6 +283,11 @@ public sealed class TavlaAgentService
             else
             {
                 events.Add(CreateEvent("next_prompt_prepared", "info", "Ajan sonraki Jules promptunu hazirladi; otomatik session acilmadi.", new { shouldStart, settings.AllowAutoJulesSessions }));
+            }
+
+            if (!string.IsNullOrWhiteSpace(implementedPromptSkippedObjectiveKey))
+            {
+                completion = SuppressImplementedNextPrompt(completion, implementedPromptSkippedObjectiveKey);
             }
 
             var reportPath = SaveReport(settings, completion, relevantSessionsOutput, pullOutput, databaseHealth, autoResult, automation);
@@ -2375,6 +2382,28 @@ public sealed class TavlaAgentService
         }
 
         return automation.Summary;
+    }
+
+    private static OpenRouterCompletionResult SuppressImplementedNextPrompt(OpenRouterCompletionResult completion, string objectiveKey)
+    {
+        var content = JsonSerializer.Serialize(new
+        {
+            statusSummary = $"OpenRouter sonraki hedef olarak {objectiveKey} onerdi; lokal kodda uygulanmis oldugu icin yeni Jules session acilmadi.",
+            whatJulesDid = ExtractString(completion.Content, "whatJulesDid"),
+            nextPrompt = (string?)null,
+            shouldStartNewJulesSession = false,
+            databasePlan = ExtractString(completion.Content, "databasePlan"),
+            riskNotes = new[]
+            {
+                "Tekrar prompt hafizaya yazilirsa model ayni tamamlanmis hedefi onermeye devam edebilir; bu tur nextPrompt temizlendi."
+            }
+        });
+
+        return new OpenRouterCompletionResult
+        {
+            Model = completion.Model,
+            Content = content
+        };
     }
 
     private static void AddCommandLine(List<string> lines, string name, CommandResult? result)

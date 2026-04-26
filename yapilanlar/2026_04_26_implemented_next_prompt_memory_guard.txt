@@ -1,0 +1,12 @@
+2026-04-26 - Tamamlanmis nextPrompt hafiza kirlenmesi engellendi
+
+Sorun:
+- OpenRouter bazen lokal kodda artik tamamlanmis olan `data.mysql-integration` gibi hedefleri tekrar missing diye raporluyordu.
+- Ajan yeni session acmayip dogru sekilde skip etse bile bu yanlis `nextPrompt` SQL/dashboard/agent_reports hafizasina yaziliyor, sonraki turlarda modele tekrar besleniyordu.
+
+Yapilan:
+- `TavlaAgentService`, `implemented_next_prompt_skipped` durumunda OpenRouter completion icerigini rapor oncesi normalize eder.
+- Normalize edilen raporda `nextPrompt=null`, `shouldStartNewJulesSession=false` olur ve status ozeti hedefin lokal kodda zaten uygulanmis oldugunu yazar.
+
+Sonuc:
+- Tamamlanmis hedefler hem uygulama kararinda hem de uzun vadeli ajan hafizasinda tekrar prompt kaynagi haline gelmez.
