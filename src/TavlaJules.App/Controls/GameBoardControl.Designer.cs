@@ -1,6 +1,6 @@
-namespace TavlaJules.App.Views;
+namespace TavlaJules.App.Controls;
 
-partial class BoardControl
+partial class GameBoardControl
 {
     private System.ComponentModel.IContainer components = null;
 

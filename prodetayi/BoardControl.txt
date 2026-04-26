@@ -1,1 +1,0 @@
-BoardControl represents the main game board UI. Contains 24 point panels, 2 bar area panels for captured checkers, and 1 dice display panel. Inherits from UserControl.

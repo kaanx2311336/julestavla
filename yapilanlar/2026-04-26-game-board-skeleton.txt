@@ -1,0 +1,1 @@
+Oyun Tahtasi phase completed. Added GameBoardControl with 24 points, bar, borne-off area, dice view, and control buttons.

@@ -238,6 +238,9 @@ public sealed class MainForm : Form
         tabs.TabPages.Add(CreateTabPage("Ajan", BuildAgentPanel()));
         tabs.TabPages.Add(CreateTabPage("Jules Prompt", BuildPromptTab(julesButtonRow)));
         tabs.TabPages.Add(CreateTabPage("Gunluk", logTextBox));
+        
+        var boardControl = new Controls.GameBoardControl();
+        tabs.TabPages.Add(CreateTabPage("Oyun Tahtasi", boardControl));
 
         panel.Controls.Add(tabs);
         return panel;

@@ -22,3 +22,4 @@
 - Ajan yeni Jules session olusturursa UI'daki izlenen session id otomatik yeni id ile guncellenir ve ayarlara kaydedilir.
 - Ajan her turda otonom ozetini gunluge yazar; apply/verify/commit/push kararlari dashboard ve SQL eventlerinde ayrica izlenir.
 - Proje klasorunu ve GitHub reposunu dis uygulamada acabilir.
+MainForm.cs was updated to include the Oyun Tahtasi tab with the newly implemented GameBoardControl.

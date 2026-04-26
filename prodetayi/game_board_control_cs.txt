@@ -1,0 +1,1 @@
+GameBoardControl represents the main game board UI. Contains 24 point panels, 2 bar area panels for captured checkers, 2 borne-off area panels, 1 dice display panel, and control buttons (New Game, Roll Dice, Apply Move). Inherits from UserControl.
