@@ -10,3 +10,6 @@ Yapilan:
 
 Sonuc:
 - Tamamlanmis hedefler hem uygulama kararinda hem de uzun vadeli ajan hafizasinda tekrar prompt kaynagi haline gelmez.
+
+Ek duzeltme:
+- Koruma yalnizca otomatik session acma denemesi yapilacakken degil, OpenRouter `shouldStartNewJulesSession=false` donse bile calisir. Boylece rapor/sqlde pasif halde bekleyen yanlis `nextPrompt` de birikmez.
