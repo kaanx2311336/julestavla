@@ -125,6 +125,20 @@ public sealed class AgentStateService
         return state.SessionObjectiveKeys.TryGetValue(sessionId, out var objectiveKey) ? objectiveKey : "";
     }
 
+    public string GetSessionIdForObjectiveKey(ProjectSettings settings, string objectiveKey)
+    {
+        if (string.IsNullOrWhiteSpace(objectiveKey))
+        {
+            return "";
+        }
+
+        var state = Load(settings);
+        return state.SessionObjectiveKeys
+            .FirstOrDefault(item => item.Value.Equals(objectiveKey, StringComparison.Ordinal))
+            .Key
+            ?? "";
+    }
+
     public void MarkPromptSent(ProjectSettings settings, string prompt, string sessionId, string objectiveKey = "")
     {
         var state = Load(settings);

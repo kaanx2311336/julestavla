@@ -9,5 +9,7 @@ Summarizes the `GameBoardControl` class located at `src/TavlaJules.App/Controls/
     *   `RollDice()` calls the engine to roll and generate legal moves, advancing turn automatically if no moves are possible.
     *   Click handlers on points, bars, and borne-off areas enable move selection and highlighting.
     *   `ApplySelectedMove()` attempts to execute the `_selectedMove` against the engine.
+    *   `PlayAiTurn()` uses `AiOpponentService` through the "AI Hamlesi" button to apply a deterministic local AI sequence.
     *   `UpdateUiState()` and `RenderBoard()` synchronize the visual layout with the `GameStateSnapshot` captured from the engine.
     *   `OnSaveGameClick` and `OnLoadGameClick` allow the local engine state to be saved and restored via the persistence service using `"smoke-test-game"` ID.
+    *   2026-04-28 duzeltmesiyle AI hamle dizisi uygulandiktan sonra `GameEngine.ApplyMove` zaten turu tamamlayip ilerlettigi icin UI tarafindaki ekstra `AdvanceTurn()` kaldirildi; boylece AI hamlesi oyuncuyu iki kez cevirmiyor.

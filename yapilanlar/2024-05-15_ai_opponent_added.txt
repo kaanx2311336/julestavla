@@ -1,0 +1,2 @@
+Implemented local AI opponent logic in AiOpponentService. Built UI button in GameBoardControl for playing AI turn. Added tests.
+Refactored AiOpponentService to the Engine project and implemented a recursive DFS logic using Snapshot capture/restore to fix mid-turn or doubles execution bugs flagged by review.

@@ -1,0 +1,7 @@
+AiOpponentService (src/TavlaJules.Engine/Services/AiOpponentService.cs)
+- Chooses a move sequence for the local AI based on a deterministic heuristic: uses max dice, prefers hits, bearing off, and escaping the bar.
+- Moved to the Engine project based on review feedback.
+- Uses a custom DFS over `engine.GenerateLegalMoves(engine.CurrentTurn)` combined with `engine.CaptureGameStateSnapshot()` to robustly explore from mid-turn or full-turn remaining dice states.
+- GameBoardControl UI updated with "AI Hamlesi" button.
+- 2026-04-28 duzeltmesiyle DFS backtracking sirasinda private `_remainingDice` listesi snapshot'taki kalan zarlarla geri yuklenir; boylece bir dalda tuketilen zar diger aday hamle dizilerini bozmaz.
+- `AiOpponentServiceTests.GetBestMoveSequence_ShouldPreferHit_WhenMultipleSequencesAvailable`, beyaz tasin ileri yonunu dogru temsil eden 20 -> 22 vurma pozisyonuyla guncellendi.

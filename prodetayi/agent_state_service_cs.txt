@@ -13,6 +13,7 @@
 - `SessionObjectiveKeys`, ayni Jules session altinda devam edilen islerde session id -> aktif hedef anahtari eslemesini tutar.
 - `PendingAppliedSessionId`, apply edilmis ama commit/push akisi tamamlanmadan kirli kalmis workspace'i sonraki turda toparlamak icin kullanilir.
 - `GetLastPromptSessionId`, tekrar algisinda son acilan Jules session id'sini bulmak icin kullanilir.
+- `GetSessionIdForObjectiveKey`, bir hedef anahtarinin state icinde gercek bir Jules session id'sine bagli olup olmadigini bulur; bu bilgi stale prompt/objective kilitlerini ayiklamak icin kullanilir.
 - `MarkAwaitingInputSessionHandled`, input bekleyen session'i ele alinmis sayar ve yeni takip id'sini kaydeder.
 - `MarkAwaitingInputRecoverySession`, kurtarma session id'sini ayri listeye ekler.
 - `MarkAwaitingInputSessionReplied`, mevcut Jules session'a feedback cevabi basarili gonderildiginde session id'sini kaydeder.

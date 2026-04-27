@@ -39,6 +39,16 @@ public class TavlaAgentServiceTests
     }
 
     [Fact]
+    public void BuildPromptObjectiveKey_ClassifiesVagueGameEngineSignatureAsTurnDice()
+    {
+        var prompt = "Please provide the exact GameEngine method signature you need added.";
+
+        var objectiveKey = InvokeBuildPromptObjectiveKey(prompt);
+
+        Assert.Equal("engine.turn-dice", objectiveKey);
+    }
+
+    [Fact]
     public void CanAutoSaveDirtyWorkspace_AllowsAgentOwnedFiles()
     {
         var status = new CommandResult
@@ -128,6 +138,140 @@ public class TavlaAgentServiceTests
         }
     }
 
+    [Fact]
+    public async Task ProcessTrackedCompletedSession_TreatsAwaitingInputImplementedObjectiveAsNoOpCompleted()
+    {
+        var tempFolder = Path.Combine(Path.GetTempPath(), $"tavlajules-agent-test-{Guid.NewGuid():N}");
+        var sessionId = "13307009469547887061";
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(tempFolder, "src", "TavlaJules.Engine", "Engine"));
+            Directory.CreateDirectory(Path.Combine(tempFolder, "src", "TavlaJules.Engine", "Models"));
+            await File.WriteAllTextAsync(
+                Path.Combine(tempFolder, "src", "TavlaJules.Engine", "Engine", "GameEngine.cs"),
+                """
+                namespace TavlaJules.Engine.Engine;
+                public sealed class GameEngine
+                {
+                    public object RemainingDice { get; } = new();
+                    public void StartTurn() { }
+                    public void AdvanceTurn() { }
+                    public void RollDice() { }
+                }
+                """);
+            await File.WriteAllTextAsync(
+                Path.Combine(tempFolder, "src", "TavlaJules.Engine", "Models", "GameStateSnapshot.cs"),
+                "namespace TavlaJules.Engine.Models; public sealed record GameStateSnapshot();");
+
+            var settings = new ProjectSettings
+            {
+                AgentName = "tavlajules",
+                ProjectFolder = tempFolder,
+                GitHubRepo = "kaanx2311336/julestavla",
+                TrackedJulesSessionId = sessionId
+            };
+            var sessionsOutput = $"""
+             {sessionId}    Please provide the exact GameEngine method signature you need added  kaanx2311336/julestavla  2h ago
+            """;
+            var events = new List<AgentEvent>();
+
+            var automation = await InvokeProcessTrackedCompletedSessionAsync(
+                settings,
+                sessionId,
+                sessionsOutput,
+                events);
+
+            Assert.True(automation.TrackedSessionCompleted);
+            Assert.True(automation.AlreadyApplied);
+            Assert.False(automation.TrackedSessionAwaitingInput);
+            Assert.Contains(events, item => item.EventType == "awaiting_session_objective_already_implemented");
+            Assert.True(new AgentStateService().HasHandledCompletedSession(settings, sessionId));
+        }
+        finally
+        {
+            if (Directory.Exists(tempFolder))
+            {
+                Directory.Delete(tempFolder, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void IsDuplicatePromptTarget_ForgetsStaleObjectiveWithoutSessionId()
+    {
+        var tempFolder = Path.Combine(Path.GetTempPath(), $"tavlajules-agent-test-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(tempFolder, "agent_state"));
+            var settings = new ProjectSettings
+            {
+                AgentName = "tavlajules",
+                ProjectFolder = tempFolder,
+                GitHubRepo = "kaanx2311336/julestavla"
+            };
+            var prompt = "Create the TavlaJules board polish phase for repo kaanx2311336/julestavla.";
+            var stateService = new AgentStateService();
+            stateService.MarkPromptSent(settings, prompt, "", "app.board-polish");
+
+            var duplicate = InvokeIsDuplicatePromptTarget(
+                settings,
+                sessionsOutput: "",
+                prompt,
+                objectiveKey: "app.board-polish",
+                out var events);
+
+            Assert.False(duplicate);
+            Assert.False(stateService.HasSentPromptObjective(settings, "app.board-polish"));
+            Assert.Contains(events, item => item.EventType == "stale_prompt_objective_unlocked");
+        }
+        finally
+        {
+            if (Directory.Exists(tempFolder))
+            {
+                Directory.Delete(tempFolder, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void IsDuplicatePromptTarget_KeepsActiveSessionObjective()
+    {
+        var tempFolder = Path.Combine(Path.GetTempPath(), $"tavlajules-agent-test-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(tempFolder, "agent_state"));
+            var settings = new ProjectSettings
+            {
+                AgentName = "tavlajules",
+                ProjectFolder = tempFolder,
+                GitHubRepo = "kaanx2311336/julestavla"
+            };
+            var prompt = "Create the TavlaJules board polish phase for repo kaanx2311336/julestavla.";
+            var stateService = new AgentStateService();
+            stateService.MarkPromptSent(settings, prompt, "12345678901", "app.board-polish");
+            var sessionsOutput = """
+             12345678901    Create the TavlaJules board polish phase for repo kaanx2311336/julestavla  kaanx2311336/julestavla  Planning
+            """;
+
+            var duplicate = InvokeIsDuplicatePromptTarget(
+                settings,
+                sessionsOutput,
+                prompt,
+                objectiveKey: "app.board-polish",
+                out _);
+
+            Assert.True(duplicate);
+            Assert.True(stateService.HasSentPromptObjective(settings, "app.board-polish"));
+        }
+        finally
+        {
+            if (Directory.Exists(tempFolder))
+            {
+                Directory.Delete(tempFolder, recursive: true);
+            }
+        }
+    }
+
     private static string InvokeBuildPromptObjectiveKey(string prompt)
     {
         var method = typeof(TavlaAgentService).GetMethod(
@@ -170,5 +314,39 @@ public class TavlaAgentServiceTests
         var result = Assert.IsType<bool>(method.Invoke(new TavlaAgentService(), parameters));
         duplicateOfSessionId = Assert.IsType<string>(parameters[3]);
         return result;
+    }
+
+    private static async Task<AgentAutomationArtifacts> InvokeProcessTrackedCompletedSessionAsync(
+        ProjectSettings settings,
+        string trackedSessionId,
+        string sessionsOutput,
+        List<AgentEvent> events)
+    {
+        var method = typeof(TavlaAgentService).GetMethod(
+            "ProcessTrackedCompletedSessionAsync",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        Assert.NotNull(method);
+        var task = Assert.IsAssignableFrom<Task<AgentAutomationArtifacts>>(method.Invoke(
+            new TavlaAgentService(),
+            [settings, trackedSessionId, sessionsOutput, events, CancellationToken.None]));
+        return await task;
+    }
+
+    private static bool InvokeIsDuplicatePromptTarget(
+        ProjectSettings settings,
+        string sessionsOutput,
+        string prompt,
+        string objectiveKey,
+        out List<AgentEvent> events)
+    {
+        var method = typeof(TavlaAgentService).GetMethod(
+            "IsDuplicatePromptTarget",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        Assert.NotNull(method);
+        events = [];
+        object?[] parameters = [settings, sessionsOutput, prompt, objectiveKey, events];
+        return Assert.IsType<bool>(method.Invoke(new TavlaAgentService(), parameters));
     }
 }

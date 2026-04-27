@@ -21,6 +21,7 @@ public partial class GameBoardControl : UserControl
     public Button ApplyMoveButton { get; private set; }
     public Button SaveGameButton { get; private set; }
     public Button LoadGameButton { get; private set; }
+    public Button AiMoveButton { get; private set; }
     
     public Label LogLabel { get; private set; }
     
@@ -32,6 +33,7 @@ public partial class GameBoardControl : UserControl
     private int? _selectedSourcePoint;
     private Move _selectedMove;
     private TavlaJules.App.Services.GamePersistenceService? _persistenceService;
+    private TavlaJules.Engine.Services.AiOpponentService _aiService = new TavlaJules.Engine.Services.AiOpponentService();
 
     public GameBoardControl()
     {
@@ -68,13 +70,16 @@ public partial class GameBoardControl : UserControl
         
         LoadGameButton.Width = 140;
 
+        AiMoveButton = CreateButton("AI Hamlesi", 560);
+        AiMoveButton.BackColor = Color.Indigo;
+
         CurrentPlayerLabel = new Label
         {
             Text = "Sira: Bekleniyor...",
             ForeColor = Color.White,
             Font = new Font("Segoe UI", 12F, FontStyle.Bold),
             AutoSize = true,
-            Location = new System.Drawing.Point(560, 18)
+            Location = new System.Drawing.Point(670, 18)
         };
         
         LogLabel = new Label
@@ -83,7 +88,7 @@ public partial class GameBoardControl : UserControl
             ForeColor = Color.LightGray,
             Font = new Font("Segoe UI", 10F, FontStyle.Regular),
             AutoSize = true,
-            Location = new System.Drawing.Point(700, 20)
+            Location = new System.Drawing.Point(810, 20)
         };
 
         controlArea.Controls.Add(NewGameButton);
@@ -91,6 +96,7 @@ public partial class GameBoardControl : UserControl
         controlArea.Controls.Add(ApplyMoveButton);
         controlArea.Controls.Add(SaveGameButton);
         controlArea.Controls.Add(LoadGameButton);
+        controlArea.Controls.Add(AiMoveButton);
         controlArea.Controls.Add(CurrentPlayerLabel);
         controlArea.Controls.Add(LogLabel);
         
@@ -169,6 +175,7 @@ public partial class GameBoardControl : UserControl
         ApplyMoveButton.Click += (s, e) => ApplySelectedMove();
         SaveGameButton.Click += OnSaveGameClick;
         LoadGameButton.Click += OnLoadGameClick;
+        AiMoveButton.Click += (s, e) => PlayAiTurn();
         
         for (int i = 0; i < 24; i++)
         {
@@ -329,6 +336,50 @@ public partial class GameBoardControl : UserControl
         UpdateUiState();
     }
     
+
+    private void PlayAiTurn()
+    {
+        if (_gameEngine == null) return;
+        
+        // If turn hasn't started or dice not rolled for the active player, roll dice
+        if (_gameEngine.RemainingDice.Count == 0 && !_gameEngine.IsTurnComplete)
+        {
+            var (die1, die2) = _gameEngine.RollDice();
+            _gameEngine.StartTurn(_gameEngine.CurrentTurn, die1, die2);
+        }
+
+        if (_gameEngine.RemainingDice.Count == 0 || _gameEngine.IsTurnComplete)
+        {
+            return;
+        }
+
+        var sequence = _aiService.GetBestMoveSequence(_gameEngine);
+        
+        if (sequence.Count == 0)
+        {
+            LogLabel.Text = $"Durum: AI {_gameEngine.CurrentTurn} icin gecerli hamle yok. Tur geciliyor.";
+            _gameEngine.AdvanceTurn();
+        }
+        else
+        {
+            LogLabel.Text = $"Durum: AI Hamlesi: {sequence.Count} hamle yapildi.";
+            foreach (var move in sequence)
+            {
+                _gameEngine.ApplyMove(move);
+            }
+        }
+        
+        _selectedSourcePoint = null;
+        _selectedMove = null;
+        _legalMoves.Clear();
+        if (_gameEngine.RemainingDice.Count > 0 && !_gameEngine.IsTurnComplete)
+        {
+            _legalMoves = _gameEngine.GenerateLegalMoves(_gameEngine.CurrentTurn).ToList();
+        }
+        UpdateUiState();
+        RenderBoard(_gameEngine);
+    }
+
     private void UpdateUiState()
     {
         if (_gameEngine == null)
@@ -341,6 +392,7 @@ public partial class GameBoardControl : UserControl
         }
 
         RollDiceButton.Enabled = _gameEngine.IsTurnComplete;
+        AiMoveButton.Enabled = true;
         ApplyMoveButton.Enabled = _selectedMove != null;
         CurrentPlayerLabel.Text = $"Sira: {_gameEngine.CurrentTurn} (Tur {_gameEngine.TurnNumber})";
         

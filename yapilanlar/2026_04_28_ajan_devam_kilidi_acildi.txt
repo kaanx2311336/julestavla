@@ -1,0 +1,13 @@
+TavlaJules ajan dongusunde 2026-04-28 tarihinde gorulen "devam etmiyor" kilidi giderildi.
+
+Ozet:
+- Izlenen Jules session `Awaiting User Feedback/Input` veya `Awaiting Plan Approval` gorunse bile hedef lokal kodda zaten uygulanmissa ajan artik bu session'i no-op completed kabul ediyor.
+- "Please provide the exact GameEngine method signature" gibi eski netlestirme basliklari `engine.turn-dice` hedefi olarak siniflandiriliyor; bu hedef zaten uygulanmissa roadmap siradaki eksik faza geciyor.
+- Yeni Jules session komutu basarili gorunup session id parse edilemezse prompt hash/objective kilidi yazilmiyor.
+- State icinde session id karsiligi olmayan stale prompt/objective kilitleri otomatik temizleniyor; bu ozellikle `app.board-polish` hedefinin tekrar acilabilmesini sagliyor.
+- AI opponent fazindan kalan test kirigi duzeltildi: DFS backtracking `_remainingDice` listesini geri yukluyor, vurma testi beyaz oyuncunun dogru hareket yonune gore guncellendi.
+- `GameBoardControl` icindeki AI hamlesi, `GameEngine.ApplyMove` zaten turu ilerlettigi icin ekstra `AdvanceTurn()` yapmiyor.
+
+Dogrulama:
+- `dotnet test TavlaJules.sln` basarili: 62 test gecti.
+

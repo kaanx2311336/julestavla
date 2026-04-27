@@ -157,9 +157,12 @@ public sealed class TavlaAgentService
                     var canRetryNoDiffCompletedObjective = automation.NoDiffObjectiveReopened
                         && shouldContinueCompletedSession
                         && ObjectiveKeysMatch(completedObjectiveKeyAtStart, promptObjectiveKey);
-                    var duplicatePromptTarget = agentStateService.HasSentPrompt(settings, promptToSend)
-                        || agentStateService.HasSentPromptObjective(settings, promptObjectiveKey)
-                        || SessionsContainObjective(relevantSessionsOutput, promptObjectiveKey);
+                    var duplicatePromptTarget = IsDuplicatePromptTarget(
+                        settings,
+                        relevantSessionsOutput,
+                        promptToSend,
+                        promptObjectiveKey,
+                        events);
 
                     if (duplicatePromptTarget && !canRetryNoDiffCompletedObjective)
                     {
@@ -203,9 +206,17 @@ public sealed class TavlaAgentService
                             newJulesSessionId = AgentStateService.ParseSessionId(autoResult);
                         }
 
-                        if (autoResult.IsSuccess)
+                        if (autoResult.IsSuccess && !string.IsNullOrWhiteSpace(newJulesSessionId))
                         {
                             agentStateService.MarkPromptSent(settings, promptToSend, newJulesSessionId, promptObjectiveKey);
+                        }
+                        else if (autoResult.IsSuccess)
+                        {
+                            events.Add(CreateEvent(
+                                "jules_session_id_missing",
+                                "warning",
+                                "Jules komutu basarili gorundu ama cikti icinden yeni session id okunamadi; prompt tekrar kilidi yazilmadi.",
+                                new { promptObjectiveKey, shouldContinueCompletedInPlace }));
                         }
 
                         if (autoResult.IsSuccess && shouldRecoverAwaitingInputSession)
@@ -389,6 +400,28 @@ public sealed class TavlaAgentService
             return automation;
         }
 
+        var trackedObjectiveKey = ResolveSessionObjectiveKey(settings, sessionsOutput, trackedSessionId);
+        if ((automation.TrackedSessionAwaitingInput || automation.TrackedSessionAwaitingPlanApproval)
+            && IsPromptObjectiveImplemented(settings.ProjectFolder, trackedObjectiveKey))
+        {
+            var waitingKind = automation.TrackedSessionAwaitingPlanApproval
+                ? "Awaiting Plan Approval"
+                : "Awaiting User Feedback/Input";
+            automation.TrackedSessionCompleted = true;
+            automation.TrackedSessionAwaitingInput = false;
+            automation.TrackedSessionAwaitingPlanApproval = false;
+            automation.AlreadyApplied = true;
+            automation.DuplicateCompletedSession = true;
+            automation.Summary = $"{waitingKind} session hedefi ({trackedObjectiveKey}) mevcut kodda zaten uygulanmis; no-op Jules session tamam sayildi.";
+            agentStateService.MarkCompletedSessionHandled(settings, trackedSessionId, trackedSessionId);
+            events.Add(CreateEvent(
+                "awaiting_session_objective_already_implemented",
+                "warning",
+                "Jules input/onay bekliyor gorunuyor ama hedef lokal kodda zaten var; session no-op tamam kabul edildi.",
+                new { trackedSessionId, trackedObjectiveKey, waitingKind }));
+            return automation;
+        }
+
         if (automation.TrackedSessionAwaitingInput)
         {
             automation.AwaitingInputRecoverySession =
@@ -418,7 +451,6 @@ public sealed class TavlaAgentService
             return automation;
         }
 
-        var trackedObjectiveKey = ResolveSessionObjectiveKey(settings, sessionsOutput, trackedSessionId);
         if (automation.TrackedSessionAwaitingPlanApproval
             && IsPromptObjectiveImplemented(settings.ProjectFolder, trackedObjectiveKey))
         {
@@ -1361,6 +1393,39 @@ public sealed class TavlaAgentService
             : BuildPromptObjectiveKey(TryGetSessionDescription(sessionsOutput, sessionId));
     }
 
+    private bool IsDuplicatePromptTarget(
+        ProjectSettings settings,
+        string sessionsOutput,
+        string prompt,
+        string objectiveKey,
+        List<AgentEvent> events)
+    {
+        var promptHashSent = agentStateService.HasSentPrompt(settings, prompt);
+        if (string.IsNullOrWhiteSpace(objectiveKey))
+        {
+            return promptHashSent;
+        }
+
+        var objectiveSent = agentStateService.HasSentPromptObjective(settings, objectiveKey);
+        var objectiveSessionId = agentStateService.GetSessionIdForObjectiveKey(settings, objectiveKey);
+        var objectiveInActiveSessions = SessionsContainObjective(sessionsOutput, objectiveKey);
+
+        if ((promptHashSent || objectiveSent)
+            && string.IsNullOrWhiteSpace(objectiveSessionId)
+            && !objectiveInActiveSessions)
+        {
+            agentStateService.ForgetPromptSent(settings, prompt, objectiveKey, "");
+            events.Add(CreateEvent(
+                "stale_prompt_objective_unlocked",
+                "warning",
+                "Prompt hedefi state icinde gonderildi gorunuyor ama bilinen Jules session id'si yok; kilit temizlendi ve hedef yeniden denenebilir.",
+                new { objectiveKey, promptHashSent, objectiveSent }));
+            return false;
+        }
+
+        return promptHashSent || objectiveSent || objectiveInActiveSessions;
+    }
+
     private static string SelectNextPrompt(
         ProjectSettings settings,
         string proposedPrompt,
@@ -1918,6 +1983,12 @@ public sealed class TavlaAgentService
             || normalized.Contains("gamestaterepository", StringComparison.Ordinal))
         {
             return "data.mysql-game-persistence";
+        }
+
+        if (normalized.Contains("exact gameengine method signature", StringComparison.Ordinal)
+            || normalized.Contains("gameengine method signature", StringComparison.Ordinal))
+        {
+            return "engine.turn-dice";
         }
 
         if (normalized.Contains("game state snapshot", StringComparison.Ordinal)
