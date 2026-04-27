@@ -1,0 +1,6 @@
+Created the Online Match Models and Repository.
+
+- Added `OnlineMatch.cs` and `OnlineMatchPlayer.cs` in `TavlaJules.Data`.
+- Added `OnlineMatchRepository.cs` with MySQL queries to create, list, join and update online matches.
+- Created `OnlineMatchRepositoryTests.cs` using Moq to verify DB queries inside the repository.
+- Avoided using EF Core or any unauthorized stack as per project constraints.
