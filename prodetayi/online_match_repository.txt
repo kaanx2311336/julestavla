@@ -1,0 +1,10 @@
+`OnlineMatchRepository.cs`, TavlaJules online mac oturumlari icin MySQL tabanli repository katmanidir.
+
+- `OnlineMatch` modeli mac oturumunun `Id`, `Status`, `CurrentSnapshotId`, `CreatedAt` ve `UpdatedAt` alanlarini tasir.
+- `OnlineMatchPlayer` modeli online mac oyuncusunun `MatchId`, `PlayerId`, `PlayerName` ve `ColorAssignment` bilgilerini tasir.
+- `OnlineMatchRepository`, `IDbConnectionFactory` uzerinden baglanti alir ve parametreli SQL komutlari kullanir.
+- `CreateMatchAsync`, `online_matches` tablosuna `WaitingForPlayers` durumunda yeni mac kaydi acar ve olusturulan id degerini dondurur.
+- `ListOpenMatchesAsync`, `WaitingForPlayers` durumundaki son maclari listeler.
+- `JoinMatchAsync`, mac durumunu ve oyuncu sayisini transaction icinde kontrol eder; dolu veya tamamlanmis maclara katilimi reddeder.
+- `UpdateMatchStatusAsync`, mac durumunu ve varsa current snapshot id bilgisini gunceller.
+- EF Core, PostgreSQL, Docker veya gizli `.env` degeri kullanmaz; mevcut MySQL/raw SQL yapiya sadik kalir.
