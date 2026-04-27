@@ -39,11 +39,13 @@ public sealed class MainForm : Form
     private bool agentTickInProgress;
 
     private readonly GamePersistenceService? gamePersistenceService;
+    private readonly MatchmakingService? matchmakingService;
 
     public MainForm()
     {
         settings = settingsService.Load();
         gamePersistenceService = CreateGamePersistenceService(settings, envFileService);
+        matchmakingService = CreateMatchmakingService(settings, envFileService);
 
         InitializeWindow();
         BuildLayout();
@@ -249,6 +251,7 @@ public sealed class MainForm : Form
             boardControl.SetPersistenceService(gamePersistenceService);
         }
         tabs.TabPages.Add(CreateTabPage("Oyun Tahtasi", boardControl));
+        tabs.TabPages.Add(CreateTabPage("Online Matches", new Controls.MatchmakingControl(matchmakingService)));
 
         panel.Controls.Add(tabs);
         return panel;
@@ -902,6 +905,21 @@ public sealed class MainForm : Form
         var factory = new MySqlConnectionFactory(settings, envFileService);
         var repository = new TavlaJules.Data.Repositories.MySqlGameRepository(factory);
         return new GamePersistenceService(repository);
+    }
+
+    private static MatchmakingService? CreateMatchmakingService(
+        ProjectSettings settings,
+        EnvFileService envFileService)
+    {
+        if (!envFileService.HasValue(settings.ProjectFolder, "TAVLA_ONLINE_MYSQL")
+            && !envFileService.HasValue(settings.ProjectFolder, "AJANLARIM_MYSQL"))
+        {
+            return null;
+        }
+
+        var factory = new MySqlConnectionFactory(settings, envFileService);
+        var repository = new TavlaJules.Data.Repositories.OnlineMatchRepository(factory);
+        return new MatchmakingService(repository);
     }
 
     private static string CreateDefaultJulesPrompt()
