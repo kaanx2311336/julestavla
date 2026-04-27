@@ -1,0 +1,7 @@
+`MatchmakingService.cs`, WinForms uygulama katmani ile `OnlineMatchRepository` arasindaki ince servis katmanidir.
+
+- `CreateMatchAsync`, once repository ile yeni online mac acar, sonra yerel oyuncuyu `White` olarak maca ekler.
+- `ListOpenMatchesAsync`, repository uzerinden bekleyen online maclari dondurur.
+- `JoinMatchAsync`, secili maca yerel oyuncuyu `Black` olarak eklemeyi dener.
+- `UpdateMatchStatusAsync`, online mac durumunu ve opsiyonel snapshot id bilgisini repository'ye aktarir.
+- Engine kurallarini degistirmez, socket veya polling eklemez; sadece mevcut MySQL repository API'sini WinForms UI icin kullanisli hale getirir.

@@ -1,0 +1,8 @@
+`MatchmakingControl.cs`, TavlaJules WinForms icinde online mac eslestirme yuzeyidir.
+
+- Koyu temaya uyumlu `UserControl` olarak calisir ve `Online Matches` sekmesinde gosterilir.
+- `Create Match`, `Refresh Matches` ve `Join Match` butonlariyla manuel online mac akisini saglar.
+- `MatchmakingService` yoksa `TAVLA_ONLINE_MYSQL` baglantisi olmadigini yazar ve butonlari pasif tutar.
+- Acik maclari `ListView` icinde `Match ID`, `Status` ve `Created` kolonlariyla listeler.
+- Yerel olarak olusturulan maca ayni oyuncunun tekrar katilmasini UI seviyesinde engeller.
+- Arka planda polling, socket veya yeni engine kurali eklemez; sadece kullanici komutuyla repository servisini cagirir.

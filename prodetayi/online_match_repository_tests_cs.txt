@@ -1,0 +1,6 @@
+`OnlineMatchRepositoryTests.cs`, online mac repository katmaninin SQL/parametre regresyon testlerini tutar.
+
+- Moq ile `DbCommand.Parameters` gibi override edilemeyen ADO.NET uyelerini mock'lamak yerine kucuk fake `IDbConnection`, `IDbCommand` ve parameter collection siniflari kullanir.
+- `CreateMatchAsync_ExecutesParameterizedInsertAndReturnsMatchId`, `online_matches` INSERT komutunu ve `@id`, `@status` parametrelerini dogrular.
+- `UpdateMatchStatusAsync_ExecutesParameterizedUpdate`, status/snapshot update SQL'ini ve `@id`, `@status`, `@snapshotId` parametrelerini dogrular.
+- Canli MySQL baglantisi gerektirmez; amac dirty-workspace autosave akisini kiran test seviyesindeki Moq hatasini tekrar yakalamaktir.

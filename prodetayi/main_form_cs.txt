@@ -25,3 +25,5 @@
 MainForm.cs was updated to include the Oyun Tahtasi tab with the newly implemented GameBoardControl.
 
 - Passed `GamePersistenceService` into `GameBoardControl` on setup to allow local app-driven game state persistence testing.
+- 2026-04-27 guncellemesiyle `Online Matches` sekmesi eklendi. Bu sekme `MatchmakingControl` uzerinden online mac olusturma, acik maclari yenileme ve secili maca katilma akislarini gosterir.
+- `CreateMatchmakingService`, mevcut `MySqlConnectionFactory` ve `OnlineMatchRepository` ile `MatchmakingService` kurar; `TAVLA_ONLINE_MYSQL` veya lokal test icin `AJANLARIM_MYSQL` yoksa online sekme baglantisiz durum mesajiyla pasif kalir.

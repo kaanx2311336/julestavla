@@ -1,0 +1,8 @@
+Online match repository ve matchmaking UI fazinda ajan ikinci kez durdugu icin yerel toparlama yapildi.
+
+- Kök neden: Jules repository patch'i workspace'e gelmisti ama `OnlineMatchRepositoryTests` Moq ile `DbCommand.Parameters` ozelligini mock'ladigi icin testler fail oluyordu; dirty-workspace autosave commit/push asamasi bu yuzden duruyordu.
+- Testler fake `IDbConnection` / `IDbCommand` altyapisiyla yeniden yazildi ve canli DB gerektirmeden SQL/parametre dogruluyor.
+- `prodetayi/OnlineMatchRepository.md` yerine proje kuralina uygun `prodetayi/online_match_repository.txt` olusturuldu.
+- `MatchmakingService` ve `MatchmakingControl` eklenerek `Online Matches` sekmesi yerel olarak tamamlandi.
+- `TavlaAgentService`, temiz calisma alaninda hedef zaten uygulanmis gorunuyorsa completed remote diff'i tekrar apply etmeyip sonraki faza gececek sekilde korundu.
+- Dogrulama: `dotnet test .\TavlaJules.sln -c Release` basarili, 55 test gecti.

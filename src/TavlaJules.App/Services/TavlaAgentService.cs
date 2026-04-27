@@ -651,6 +651,25 @@ public sealed class TavlaAgentService
             return automation;
         }
 
+        if (IsPromptObjectiveImplemented(settings.ProjectFolder, completedObjectiveKey))
+        {
+            automation.AlreadyApplied = true;
+            automation.DuplicateCompletedSession = true;
+            automation.Summary = $"Completed Jules session hedefi ({completedObjectiveKey}) temiz calisma alaninda zaten uygulanmis gorunuyor; remote diff tekrar apply edilmeyecek.";
+            agentStateService.MarkCompletedSessionHandled(settings, trackedSessionId, trackedSessionId);
+            events.Add(CreateEvent(
+                "completed_objective_already_implemented_skipped",
+                "info",
+                "Completed Jules session diff tasiyor ama hedef lokal kodda zaten mevcut; patch yeniden uygulanmayacak.",
+                new
+                {
+                    trackedSessionId,
+                    completedObjectiveKey,
+                    changedFiles = ExtractChangedFilesFromDiff(automation.JulesPullResult.Output)
+                }));
+            return automation;
+        }
+
         automation.JulesApplyResult = await julesCliService.PullSessionAsync(settings, trackedSessionId, apply: true, cancellationToken);
         automation.AppliedThisTurn = automation.JulesApplyResult.IsSuccess;
         automation.AutomationBlocked = !automation.JulesApplyResult.IsSuccess;
