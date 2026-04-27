@@ -3,5 +3,6 @@
 - `git status --porcelain` ile apply oncesi calisma alaninin temiz olup olmadigini kontrol eder.
 - `dotnet build .\TavlaJules.sln -c Release` ve `dotnet test .\TavlaJules.sln -c Release --no-build` ile Jules patch'ini dogrular.
 - `git add -A`, staged secret scan, `git commit` ve `git push origin main` adimlarini sirali calistirir.
+- `CommitWithMessageAsync` ile dirty-workspace toparlama gibi Jules session id disi otomatik commit mesajlarini da destekler.
 - Staged secret scan Aiven/OpenRouter anahtar kaliplarini arar; eslesme varsa commit/push sureci bloklanir.
 - Her komut `CommandResult` dondurur; zaman asimi veya process hatasi exit code `-1` olarak raporlanir.

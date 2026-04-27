@@ -1,0 +1,22 @@
+2026-04-27 TavlaJules otonom roadmap kilidi acildi
+
+Sorun:
+- Dakikalik TavlaJules ajani, OpenRouter her turda tamamlanmis `app.persistence-smoke-action` hedefini onerdiginde yeni Jules session acmiyordu.
+- Lokal roadmap aslinda `online.match-schema` fazina gecmeliydi; fakat online schema promptunun hedef metninde gecmis faz olarak "persistence smoke checks are in place" yazdigi icin siniflandirici promptu tekrar `app.persistence-smoke-action` saniyordu.
+- Bu nedenle `nextPrompt` null temizleniyor, `shouldStartNewJulesSession=false` raporlaniyor ve dongu beklemede kaliyordu.
+
+Yapilan degisiklikler:
+- `src/TavlaJules.App/Services/TavlaAgentService.cs` icinde hedef tanima sirasi online/UI/gameplay hedefleri once gelecek sekilde duzeltildi.
+- `persistence smoke` tanimi daraltildi; artik yalnizca gercek app persistence smoke-action promptlari bu hedefe duser.
+- Roadmap `online.match-schema` sonrasi icin genisletildi: `online.match-repository`, `online.matchmaking-ui`, `app.ai-opponent`, `app.board-polish`.
+- Online fazlarda App katmani degisiklikleri yanlis hedef sayilmasin diye completed patch hedef kontrolu guncellendi.
+- Completed Jules patch apply oncesinde dirty workspace gorulurse, `PendingAppliedSessionId` olmasa bile guvenli otomasyon dosyalari build/test ve secret scan sonrasi commit/push edilecek sekilde toparlama akisi eklendi.
+- `.env`, agent raporlari/state, publish/bin/obj, appsettings ve secret adli dosyalar otomatik toparlama disinda birakildi; boylece guvenli olmayan kirli alanlarda apply hala durur.
+- `src/TavlaJules.Engine.Tests/Services/TavlaAgentServiceTests.cs` eklendi ve siniflandirma regresyonu testle kilitlendi.
+- Dirty-workspace auto-save kabul/red davranisi icin iki regresyon testi eklendi.
+
+Dogrulama:
+- `dotnet test TavlaJules.sln` basarili.
+- Sonuc: 50 test basarili, 0 basarisiz.
+- `dotnet publish src\TavlaJules.App\TavlaJules.App.csproj -c Release -o publish` basarili; `publish/` altindaki EXE guncellendi.
+- Mevcut `GameBoardControl` nullable uyarilari devam ediyor; bu is kapsaminda yeni hata olusmadi.

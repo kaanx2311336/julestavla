@@ -602,11 +602,50 @@ public sealed class TavlaAgentService
                     automation.Summary = "Kirli workspace toparlanamadi; build/test/commit/push detaylari agent_events icinde.";
                 }
             }
+            else if (settings.AutoCommitAndPushAppliedChanges
+                && CanAutoSaveDirtyWorkspace(automation.GitStatusBeforeApply, out var dirtyFiles, out var unsafeFiles))
+            {
+                automation.ResumedDirtyWorkspace = true;
+                events.Add(CreateEvent(
+                    "dirty_workspace_autosave_started",
+                    "warning",
+                    "Guvenli gorunen yerel otomasyon degisiklikleri dogrulanip commit/push edilecek; Jules patch apply sonraki tura birakildi.",
+                    new { trackedSessionId, dirtyFiles }));
+
+                var verified = !settings.AutoRunVerification || await VerifyAppliedChangesAsync(settings, automation, events, cancellationToken);
+                if (verified)
+                {
+                    var commitMessage = $"Auto-save agent workspace before Jules session {trackedSessionId}";
+                    await CommitAndPushAppliedChangesAsync(settings, trackedSessionId, automation, events, cancellationToken, commitMessage);
+                }
+
+                automation.GitStatusAfterAutomation = await workspaceAutomationService.GetGitStatusAsync(settings, cancellationToken);
+                if (!automation.AutomationBlocked)
+                {
+                    automation.Summary = "Kirli workspace guvenli otomasyon degisiklikleri olarak dogrulandi ve commit/push edildi. Bu tur Jules patch'i uygulanmadi; sonraki tur temiz calisma alaniyla devam edecek.";
+                }
+                else
+                {
+                    automation.Summary = "Kirli workspace otomatik toparlanamadi; build/test/secret-scan/commit/push detaylari agent_events icinde.";
+                }
+            }
             else
             {
                 automation.AutomationBlocked = true;
                 automation.Summary = "Calisma alani temiz olmadigi icin completed Jules patch'i otomatik uygulanmadi.";
-                events.Add(CreateEvent("auto_apply_blocked_dirty_workspace", "warning", "Calisma alani temiz degil; otomatik apply durduruldu.", new { trackedSessionId, status = Trim(automation.GitStatusBeforeApply.Output + automation.GitStatusBeforeApply.Error, 1200) }));
+                var statusText = automation.GitStatusBeforeApply.Output + automation.GitStatusBeforeApply.Error;
+                CanAutoSaveDirtyWorkspace(automation.GitStatusBeforeApply, out var blockedDirtyFiles, out var blockedUnsafeFiles);
+                events.Add(CreateEvent(
+                    "auto_apply_blocked_dirty_workspace",
+                    "warning",
+                    "Calisma alani temiz degil ve otomatik toparlama icin guvenli gorunmuyor; otomatik apply durduruldu.",
+                    new
+                    {
+                        trackedSessionId,
+                        dirtyFiles = blockedDirtyFiles,
+                        unsafeFiles = blockedUnsafeFiles,
+                        status = Trim(statusText, 1200)
+                    }));
             }
 
             return automation;
@@ -826,7 +865,8 @@ public sealed class TavlaAgentService
         string trackedSessionId,
         AgentAutomationArtifacts automation,
         List<AgentEvent> events,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string commitMessage = "")
     {
         automation.GitStageResult = await workspaceAutomationService.StageAllAsync(settings, cancellationToken);
         events.Add(CreateEvent("git_stage_completed", automation.GitStageResult.IsSuccess ? "info" : "error", "Degisiklikler git index'e alindi.", new { automation.GitStageResult.ExitCode }));
@@ -845,7 +885,9 @@ public sealed class TavlaAgentService
             return;
         }
 
-        automation.GitCommitResult = await workspaceAutomationService.CommitAsync(settings, trackedSessionId, cancellationToken);
+        automation.GitCommitResult = string.IsNullOrWhiteSpace(commitMessage)
+            ? await workspaceAutomationService.CommitAsync(settings, trackedSessionId, cancellationToken)
+            : await workspaceAutomationService.CommitWithMessageAsync(settings, commitMessage, cancellationToken);
         var nothingToCommit = WorkspaceAutomationService.HasNothingToCommit(automation.GitCommitResult);
         events.Add(CreateEvent("git_commit_completed", automation.GitCommitResult.IsSuccess || nothingToCommit ? "info" : "error", "Otomatik commit denemesi tamamlandi.", new { automation.GitCommitResult.ExitCode, nothingToCommit }));
         if (!automation.GitCommitResult.IsSuccess)
@@ -1651,6 +1693,96 @@ public sealed class TavlaAgentService
             """;
         }
 
+        if (!IsPromptObjectiveImplemented(settings.ProjectFolder, "online.match-repository"))
+        {
+            return $"""
+            Create the TavlaJules online match repository/service phase for repo {settings.GitHubRepo}.
+
+            Target files:
+            - new or updated models/repositories/services under `src/TavlaJules.Data/` and `src/TavlaJules.App/Services/`
+            - focused tests under the existing test project
+            - relevant `prodetayi/` summaries and one dated `yapilanlar/` note
+
+            Goal:
+            The online match schema exists. Add the small C# layer that creates, lists, joins, and updates online tavla matches through MySQL without changing engine rules.
+
+            Requirements:
+            - Use existing `IDbConnectionFactory`, `MySqlConnectionFactory`, and parameterized MySQL commands.
+            - Add clear async methods such as `CreateMatchAsync`, `ListOpenMatchesAsync`, `JoinMatchAsync`, and `UpdateMatchStatusAsync`.
+            - Keep player color assignment deterministic and guard against joining full or completed matches.
+            - Do not add EF Core, PostgreSQL, Docker, network sockets, secrets, or `.env` values.
+            - Keep the patch around 100-500 lines and verify with `dotnet build` and existing tests.
+            """;
+        }
+
+        if (!IsPromptObjectiveImplemented(settings.ProjectFolder, "online.matchmaking-ui"))
+        {
+            return $"""
+            Create the TavlaJules online matchmaking UI phase for repo {settings.GitHubRepo}.
+
+            Target files:
+            - `src/TavlaJules.App/MainForm.cs` and/or a small WinForms control under `src/TavlaJules.App/Controls/`
+            - small app-layer service wiring only where needed
+            - focused tests if the existing test structure supports the changed logic
+            - relevant `prodetayi/` summaries and one dated `yapilanlar/` note
+
+            Goal:
+            The match repository/service exists. Add a visible online matchmaking surface so a user can create a match, refresh open matches, join a match, and see clear connection/status feedback.
+
+            Requirements:
+            - Reuse existing dark control-panel styling patterns; do not rewrite the whole `MainForm`.
+            - Handle missing `TAVLA_ONLINE_MYSQL` gracefully with an on-screen status/log message.
+            - Keep online UI actions manual for now; do not add sockets or background polling yet.
+            - Do not include secrets, API keys, connection strings, or `.env` values.
+            - Keep the patch around 100-500 lines and verify with `dotnet build` and existing tests.
+            """;
+        }
+
+        if (!IsPromptObjectiveImplemented(settings.ProjectFolder, "app.ai-opponent"))
+        {
+            return $"""
+            Create the TavlaJules local AI opponent phase for repo {settings.GitHubRepo}.
+
+            Target files:
+            - new small app or engine-facing service such as `src/TavlaJules.App/Services/AiOpponentService.cs`
+            - `src/TavlaJules.App/Controls/GameBoardControl.cs` for a manual AI toggle/action
+            - focused tests under the existing test project
+            - relevant `prodetayi/` summaries and one dated `yapilanlar/` note
+
+            Goal:
+            The local board can already play turns. Add a simple deterministic opponent that chooses a legal full-turn move sequence so the game feels playable without an online opponent.
+
+            Requirements:
+            - Use existing legal move and move sequence APIs; do not rewrite tavla rules.
+            - Prefer hitting, bearing off, escaping bar, and using the most dice in a small transparent heuristic.
+            - Add a UI toggle or button for playing against the local AI and log the selected move sequence.
+            - Keep the AI deterministic/testable with no external model calls.
+            - Keep the patch around 100-500 lines and verify with `dotnet build` and existing tests.
+            """;
+        }
+
+        if (!IsPromptObjectiveImplemented(settings.ProjectFolder, "app.board-polish"))
+        {
+            return $"""
+            Create the TavlaJules board polish phase for repo {settings.GitHubRepo}.
+
+            Target files:
+            - `src/TavlaJules.App/Controls/GameBoardControl.cs`
+            - optional tiny helper/model files under `src/TavlaJules.App/`
+            - relevant `prodetayi/` summaries and one dated `yapilanlar/` note
+
+            Goal:
+            The game is playable locally and has online scaffolding. Improve the board feel with move hints, clearer checker/point states, selected-move feedback, and compact status copy.
+
+            Requirements:
+            - Keep the existing WinForms app structure; do not replace it with a new UI framework.
+            - Add visual or textual move hints for legal moves, selected source/target feedback, and better end-of-turn/winner messaging.
+            - Preserve mobile/online readiness by keeping engine rules out of the UI.
+            - Do not include secrets, API keys, connection strings, or `.env` values.
+            - Keep the patch around 100-500 lines and verify with `dotnet build` and existing tests.
+            """;
+        }
+
         return "";
     }
 
@@ -1686,6 +1818,31 @@ public sealed class TavlaAgentService
         }
 
         var normalized = NormalizeSessionDescription(prompt);
+        if (MentionsOnlineMatchmakingUi(normalized))
+        {
+            return "online.matchmaking-ui";
+        }
+
+        if (MentionsAppAiOpponent(normalized))
+        {
+            return "app.ai-opponent";
+        }
+
+        if (MentionsAppBoardPolish(normalized))
+        {
+            return "app.board-polish";
+        }
+
+        if (MentionsOnlineMatchRepository(normalized))
+        {
+            return "online.match-repository";
+        }
+
+        if (MentionsOnlineMatchSchema(normalized))
+        {
+            return "online.match-schema";
+        }
+
         if (MentionsAppPersistenceSmokeAction(normalized))
         {
             return "app.persistence-smoke-action";
@@ -1694,11 +1851,6 @@ public sealed class TavlaAgentService
         if (MentionsAppLocalTurnFlow(normalized))
         {
             return "app.local-turn-flow";
-        }
-
-        if (MentionsOnlineMatchSchema(normalized))
-        {
-            return "online.match-schema";
         }
 
         if (MentionsAppGameBoardSkeleton(normalized))
@@ -1808,7 +1960,9 @@ public sealed class TavlaAgentService
 
     private static bool MentionsAppPersistenceSmokeAction(string normalized)
     {
-        return normalized.Contains("persistence smoke", StringComparison.Ordinal)
+        return normalized.Contains("persistence smoke-action", StringComparison.Ordinal)
+            || normalized.Contains("persistence smoke action", StringComparison.Ordinal)
+            || normalized.Contains("app persistence smoke", StringComparison.Ordinal)
             || normalized.Contains("save game", StringComparison.Ordinal)
             || normalized.Contains("load last snapshot", StringComparison.Ordinal)
             || (normalized.Contains("gamepersistenceservice", StringComparison.Ordinal)
@@ -1822,10 +1976,63 @@ public sealed class TavlaAgentService
     private static bool MentionsOnlineMatchSchema(string normalized)
     {
         return normalized.Contains("online match schema", StringComparison.Ordinal)
+            || normalized.Contains("online match tables", StringComparison.Ordinal)
+            || normalized.Contains("online_match table", StringComparison.Ordinal)
             || normalized.Contains("online_matches", StringComparison.Ordinal)
             || normalized.Contains("online_match_players", StringComparison.Ordinal)
             || (normalized.Contains("match sessions", StringComparison.Ordinal)
                 && normalized.Contains("mysql", StringComparison.Ordinal));
+    }
+
+    private static bool MentionsOnlineMatchRepository(string normalized)
+    {
+        return normalized.Contains("online match repository", StringComparison.Ordinal)
+            || normalized.Contains("match repository/service", StringComparison.Ordinal)
+            || normalized.Contains("match repository", StringComparison.Ordinal)
+            || normalized.Contains("onlinematchrepository", StringComparison.Ordinal)
+            || normalized.Contains("onlinematchservice", StringComparison.Ordinal)
+            || normalized.Contains("creatematchasync", StringComparison.Ordinal)
+            || normalized.Contains("listopenmatchesasync", StringComparison.Ordinal)
+            || normalized.Contains("joinmatchasync", StringComparison.Ordinal)
+            || (normalized.Contains("online_matches", StringComparison.Ordinal)
+                && normalized.Contains("async", StringComparison.Ordinal)
+                && normalized.Contains("repository", StringComparison.Ordinal));
+    }
+
+    private static bool MentionsOnlineMatchmakingUi(string normalized)
+    {
+        return normalized.Contains("online matchmaking ui", StringComparison.Ordinal)
+            || normalized.Contains("matchmaking ui", StringComparison.Ordinal)
+            || normalized.Contains("matchmaking surface", StringComparison.Ordinal)
+            || normalized.Contains("refresh open matches", StringComparison.Ordinal)
+            || normalized.Contains("join a match", StringComparison.Ordinal)
+            || normalized.Contains("create a match", StringComparison.Ordinal)
+            || (normalized.Contains("online", StringComparison.Ordinal)
+                && normalized.Contains("winforms", StringComparison.Ordinal)
+                && normalized.Contains("match", StringComparison.Ordinal));
+    }
+
+    private static bool MentionsAppAiOpponent(string normalized)
+    {
+        return normalized.Contains("ai opponent", StringComparison.Ordinal)
+            || normalized.Contains("local ai", StringComparison.Ordinal)
+            || normalized.Contains("aiopponent", StringComparison.Ordinal)
+            || normalized.Contains("opponentservice", StringComparison.Ordinal)
+            || normalized.Contains("move heuristic", StringComparison.Ordinal)
+            || (normalized.Contains("choose", StringComparison.Ordinal)
+                && normalized.Contains("legal", StringComparison.Ordinal)
+                && normalized.Contains("move sequence", StringComparison.Ordinal));
+    }
+
+    private static bool MentionsAppBoardPolish(string normalized)
+    {
+        return normalized.Contains("board polish", StringComparison.Ordinal)
+            || normalized.Contains("move hints", StringComparison.Ordinal)
+            || normalized.Contains("selected-move feedback", StringComparison.Ordinal)
+            || normalized.Contains("selected move feedback", StringComparison.Ordinal)
+            || normalized.Contains("checker/point states", StringComparison.Ordinal)
+            || (normalized.Contains("board", StringComparison.Ordinal)
+                && normalized.Contains("polish", StringComparison.Ordinal));
     }
 
     private static bool MentionsMySqlRepositoryLayer(string normalized)
@@ -1949,6 +2156,14 @@ public sealed class TavlaAgentService
                 HasAppPersistenceSmokeAction(projectFolder),
             "online.match-schema" =>
                 HasOnlineMatchSchema(projectFolder),
+            "online.match-repository" =>
+                HasOnlineMatchRepository(projectFolder),
+            "online.matchmaking-ui" =>
+                HasOnlineMatchmakingUi(projectFolder),
+            "app.ai-opponent" =>
+                HasAppAiOpponent(projectFolder),
+            "app.board-polish" =>
+                HasAppBoardPolish(projectFolder),
             _ => false
         };
     }
@@ -2101,6 +2316,148 @@ public sealed class TavlaAgentService
                 && sql.Contains("online_match_players", StringComparison.OrdinalIgnoreCase));
     }
 
+    private static bool HasOnlineMatchRepository(string projectFolder)
+    {
+        var code = ReadProjectSourceCode(projectFolder, includeAgentService: false);
+        return code.Contains("OnlineMatch", StringComparison.Ordinal)
+            && code.Contains("online_matches", StringComparison.OrdinalIgnoreCase)
+            && code.Contains("online_match_players", StringComparison.OrdinalIgnoreCase)
+            && (code.Contains("CreateMatchAsync", StringComparison.Ordinal)
+                || code.Contains("ListOpenMatchesAsync", StringComparison.Ordinal)
+                || code.Contains("JoinMatchAsync", StringComparison.Ordinal));
+    }
+
+    private static bool HasOnlineMatchmakingUi(string projectFolder)
+    {
+        var appRoot = Path.Combine(projectFolder, "src", "TavlaJules.App");
+        var code = ReadProjectSourceCode(appRoot, includeAgentService: false);
+        return (code.Contains("OnlineMatch", StringComparison.Ordinal)
+                || code.Contains("Matchmaking", StringComparison.Ordinal)
+                || code.Contains("Open Matches", StringComparison.Ordinal))
+            && (code.Contains("Create Match", StringComparison.Ordinal)
+                || code.Contains("Join Match", StringComparison.Ordinal)
+                || code.Contains("Refresh Matches", StringComparison.Ordinal));
+    }
+
+    private static bool HasAppAiOpponent(string projectFolder)
+    {
+        var code = ReadProjectSourceCode(projectFolder, includeAgentService: false);
+        return (code.Contains("AiOpponent", StringComparison.Ordinal)
+                || code.Contains("AIOpponent", StringComparison.Ordinal)
+                || code.Contains("MoveHeuristic", StringComparison.Ordinal))
+            && (code.Contains("GenerateLegalMoveSequences", StringComparison.Ordinal)
+                || code.Contains("MoveSequence", StringComparison.Ordinal));
+    }
+
+    private static bool HasAppBoardPolish(string projectFolder)
+    {
+        var boardControl = ReadBoardControlCode(projectFolder);
+        return (boardControl.Contains("MoveHint", StringComparison.Ordinal)
+                || boardControl.Contains("move hint", StringComparison.OrdinalIgnoreCase)
+                || boardControl.Contains("LegalMoveHint", StringComparison.Ordinal))
+            && (boardControl.Contains("SelectedMove", StringComparison.Ordinal)
+                || boardControl.Contains("selected move", StringComparison.OrdinalIgnoreCase))
+            && (boardControl.Contains("Winner", StringComparison.Ordinal)
+                || boardControl.Contains("Game over", StringComparison.OrdinalIgnoreCase)
+                || boardControl.Contains("Kazanan", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string ReadProjectSourceCode(string folder, bool includeAgentService)
+    {
+        if (!Directory.Exists(folder))
+        {
+            return "";
+        }
+
+        return string.Join(
+            Environment.NewLine,
+            Directory.GetFiles(folder, "*.cs", SearchOption.AllDirectories)
+                .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                    && !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                    && (includeAgentService || !Path.GetFileName(file).Equals("TavlaAgentService.cs", StringComparison.Ordinal)))
+                .Select(File.ReadAllText));
+    }
+
+    private static bool CanAutoSaveDirtyWorkspace(
+        CommandResult gitStatus,
+        out IReadOnlyList<string> dirtyFiles,
+        out IReadOnlyList<string> unsafeFiles)
+    {
+        dirtyFiles = ExtractDirtyWorkspaceFiles(gitStatus);
+        unsafeFiles = dirtyFiles
+            .Where(IsUnsafeAutoSavePath)
+            .ToList();
+
+        return gitStatus.IsSuccess
+            && dirtyFiles.Count > 0
+            && unsafeFiles.Count == 0;
+    }
+
+    private static IReadOnlyList<string> ExtractDirtyWorkspaceFiles(CommandResult gitStatus)
+    {
+        var text = $"{gitStatus.Output}{Environment.NewLine}{gitStatus.Error}";
+        return text
+            .Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries)
+            .Select(ParseGitPorcelainPath)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static string ParseGitPorcelainPath(string line)
+    {
+        if (line.Length < 4)
+        {
+            return "";
+        }
+
+        var path = line[3..].Trim();
+        var renameArrowIndex = path.LastIndexOf(" -> ", StringComparison.Ordinal);
+        if (renameArrowIndex >= 0)
+        {
+            path = path[(renameArrowIndex + 4)..].Trim();
+        }
+
+        return path.Trim('"').Replace('\\', '/');
+    }
+
+    private static bool IsUnsafeAutoSavePath(string path)
+    {
+        var normalized = path.Replace('\\', '/');
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return true;
+        }
+
+        var lower = normalized.ToLowerInvariant();
+        if (lower == ".env"
+            || lower.StartsWith(".env.", StringComparison.Ordinal)
+            || lower.Contains("/.env", StringComparison.Ordinal)
+            || lower.Contains("secret", StringComparison.Ordinal)
+            || lower.Contains("appsettings", StringComparison.Ordinal)
+            || lower.EndsWith(".user", StringComparison.Ordinal)
+            || lower.StartsWith("agent_state/", StringComparison.Ordinal)
+            || lower.StartsWith("agent_reports/", StringComparison.Ordinal)
+            || lower.StartsWith("ajanizleme/data/", StringComparison.Ordinal)
+            || lower.StartsWith("publish/", StringComparison.Ordinal)
+            || lower.Contains("/bin/", StringComparison.Ordinal)
+            || lower.Contains("/obj/", StringComparison.Ordinal)
+            || lower.StartsWith(".vs/", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return !(lower.StartsWith("src/", StringComparison.Ordinal)
+            || lower.StartsWith("migrations/", StringComparison.Ordinal)
+            || lower.StartsWith("prodetayi/", StringComparison.Ordinal)
+            || lower.StartsWith("yapilanlar/", StringComparison.Ordinal)
+            || lower == "readme.md"
+            || lower == ".gitignore"
+            || lower == ".env.example"
+            || lower == "tavlajules.sln"
+            || lower.StartsWith("test_", StringComparison.Ordinal));
+    }
+
     private static bool HasMySqlPersistenceMigration(string projectFolder)
     {
         var migrationsPath = Path.Combine(projectFolder, "migrations");
@@ -2137,6 +2494,8 @@ public sealed class TavlaAgentService
         var touchesCorePersistenceTarget = changedFiles.Any(file =>
             file.StartsWith("src/TavlaJules.Data/", StringComparison.Ordinal)
             || file.StartsWith("migrations/", StringComparison.Ordinal)
+            || (objectiveKey.StartsWith("online.", StringComparison.Ordinal)
+                && file.StartsWith("src/TavlaJules.App/", StringComparison.Ordinal))
             || file.StartsWith("src/TavlaJules.Engine.Tests/", StringComparison.Ordinal)
             || file.StartsWith("tests/", StringComparison.Ordinal));
 
@@ -2318,7 +2677,11 @@ public sealed class TavlaAgentService
             ["appGameBoardSkeleton"] = IsPromptObjectiveImplemented(projectFolder, "app.game-board-skeleton") ? "done" : "missing",
             ["appLocalTurnFlow"] = IsPromptObjectiveImplemented(projectFolder, "app.local-turn-flow") ? "done" : "missing",
             ["appPersistenceSmokeAction"] = IsPromptObjectiveImplemented(projectFolder, "app.persistence-smoke-action") ? "done" : "missing",
-            ["onlineMatchSchema"] = IsPromptObjectiveImplemented(projectFolder, "online.match-schema") ? "done" : "missing"
+            ["onlineMatchSchema"] = IsPromptObjectiveImplemented(projectFolder, "online.match-schema") ? "done" : "missing",
+            ["onlineMatchRepository"] = IsPromptObjectiveImplemented(projectFolder, "online.match-repository") ? "done" : "missing",
+            ["onlineMatchmakingUi"] = IsPromptObjectiveImplemented(projectFolder, "online.matchmaking-ui") ? "done" : "missing",
+            ["appAiOpponent"] = IsPromptObjectiveImplemented(projectFolder, "app.ai-opponent") ? "done" : "missing",
+            ["appBoardPolish"] = IsPromptObjectiveImplemented(projectFolder, "app.board-polish") ? "done" : "missing"
         };
 
         return string.Join(Environment.NewLine, checks.Select(item => $"{item.Key}={item.Value}"));
@@ -2336,8 +2699,8 @@ public sealed class TavlaAgentService
         Jules Awaiting User Feedback/Input durumundaysa bunu bekleyen soru olarak raporla; tavlajules bu durumda netlestirilmis kurtarma promptu uretebilir.
         Completed is apply/dogrulama/commit/push ile guvenli hale geldiyse nextPrompt bir sonraki kucuk faz olsun.
         Ayni methodu veya ayni hedefi farkli cumlelerle tekrar onerme. OYUN FAZ DURUMU icinde done gorunen hedefler icin nextPrompt yazma.
-        GenerateLegalMoves ve dice/turn isleri done ise sonraki dogru oyun fazi full-turn move sequence generation, sonra game state snapshot, sonra MySQL schema, sonra MySQL repository, sonra MySQL app integration, sonra WinForms board skeleton, local turn flow, persistence smoke action ve online match schema olmalidir.
-        MySQL integration dahil tum DB fazlari done ise nextPrompt null yazma; OYUN FAZ DURUMU icindeki ilk missing app/online fazini sec.
+        GenerateLegalMoves ve dice/turn isleri done ise sonraki dogru oyun fazi full-turn move sequence generation, sonra game state snapshot, sonra MySQL schema, sonra MySQL repository, sonra MySQL app integration, sonra WinForms board skeleton, local turn flow, persistence smoke action, online match schema, online match repository/service, online matchmaking UI, local AI opponent ve board polish olmalidir.
+        MySQL integration dahil tum DB fazlari done ise nextPrompt null yazma; OYUN FAZ DURUMU icindeki ilk missing app/online/gameplay fazini sec.
         nextPrompt mutlaka dosya/modul bazli, test/dogrulama beklentili, 100-500 satir bandinda ve mevcut prodetayi/yapilanlar disiplinine uygun olsun.
         Proje, kullanicinin daha once yaptigi Batak projesine benzer sekilde fazli, loglu, prodetayi hafizali ve Jules destekli ilerlemelidir.
         Batak yalnizca surec disiplini ornegidir; cevapta Batak, FAZ 95 veya baska eski proje icerigi yazma.

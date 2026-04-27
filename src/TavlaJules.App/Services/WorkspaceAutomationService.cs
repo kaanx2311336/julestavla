@@ -37,6 +37,11 @@ public sealed class WorkspaceAutomationService
     public Task<CommandResult> CommitAsync(ProjectSettings settings, string sessionId, CancellationToken cancellationToken = default)
     {
         var message = $"Auto-apply Jules session {sessionId}";
+        return CommitWithMessageAsync(settings, message, cancellationToken);
+    }
+
+    public Task<CommandResult> CommitWithMessageAsync(ProjectSettings settings, string message, CancellationToken cancellationToken = default)
+    {
         return RunAsync(settings.ProjectFolder, "git", $"commit -m {Quote(message)}", 120, cancellationToken);
     }
 
