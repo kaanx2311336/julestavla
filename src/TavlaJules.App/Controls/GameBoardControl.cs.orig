@@ -389,15 +389,11 @@ public partial class GameBoardControl : UserControl
         {
             LogLabel.Text = "Oyun Bitti! Winner: White";
             CurrentPlayerLabel.Text = "Winner: White";
-            RollDiceButton.Enabled = false;
-            AiMoveButton.Enabled = false;
         }
         else if (snapshot.BlackCheckersBorneOff == 15)
         {
             LogLabel.Text = "Oyun Bitti! Winner: Black";
             CurrentPlayerLabel.Text = "Winner: Black";
-            RollDiceButton.Enabled = false;
-            AiMoveButton.Enabled = false;
         }
     }
 

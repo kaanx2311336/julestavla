@@ -1,0 +1,1 @@
+Summary: Board UI updated to include MoveHint, SelectedMove visuals, and CheckForWinner logic.

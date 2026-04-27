@@ -1,0 +1,1 @@
+Added missing visual board polish requirements, such as move hints and game over condition
