@@ -1,0 +1,1 @@
+Completed the 'online.match-schema' phase by adding idempotent MySQL table definitions for online_matches and online_match_players to migrations/002_online_match_schema.sql. Added a corresponding summary in prodetayi/online_match_schema.md.
