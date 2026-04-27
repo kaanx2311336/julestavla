@@ -4,5 +4,7 @@
 - `BuildPromptObjectiveKey_StillClassifiesPersistenceSmokeAction`, gercek app persistence smoke-action promptunun hala `app.persistence-smoke-action` olarak tanindigini dogrular.
 - `CanAutoSaveDirtyWorkspace_AllowsAgentOwnedFiles`, ajan/prodetayi/yapilanlar/test dosyalari gibi guvenli otomasyon degisikliklerinin dirty-workspace toparlama akisi icin kabul edildigini dogrular.
 - `CanAutoSaveDirtyWorkspace_RejectsSecretOrRuntimeFiles`, `.env` ve `agent_reports/` gibi secret/runtime dosyalarinin otomatik commit/push toparlamasini blokladigini dogrular.
+- `TryFindDuplicateCompletedSession_IgnoresSharedTitleWhenObjectiveDiffers`, online match schema ve online match repository gibi basliklari benzer ama hedef anahtarlari farkli completed Jules sessionlarinin duplicate sayilmamasini dogrular.
 - Testler private static `BuildPromptObjectiveKey` metodunu reflection ile cagirir; amac agent otonomi kilidini yaratan siniflandirma regresyonunu kucuk ve direkt bir testle yakalamaktir.
 - Dirty-workspace testleri de private static `CanAutoSaveDirtyWorkspace` metodunu reflection ile cagirir; amac completed Jules patch'lerinin alakasiz ama guvenli yerel ajan degisiklikleri yuzunden dakika basi bloklanmasini engellemektir.
+- Duplicate-session testi private instance `TryFindDuplicateCompletedSession` metodunu reflection ile cagirir ve gecici `agent_state/tavlajules.json` dosyasi olusturarak state objective map davranisini kapsar.

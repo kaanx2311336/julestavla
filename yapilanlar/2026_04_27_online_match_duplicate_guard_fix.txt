@@ -1,0 +1,7 @@
+TavlaJules ajaninin online match repository fazinda donmasina neden olan duplicate completed session korumasi daraltildi.
+
+- Kok neden: `online.match-repository` session basligi, onceki `online.match-schema` session basligina benzedigi icin ajan repository patch'ini schema session'inin tekrari sanip apply etmiyordu.
+- `TryFindDuplicateCompletedSession`, baslik benzerligi kararindan once tracked ve bilinen session objective key degerlerini karsilastiracak sekilde guncellendi.
+- Farkli objective key tasiyan sessionlar artik duplicate sayilmiyor; boylece online match repository/service patch'i bir sonraki temiz ajan turunda apply/build/test akina girebilir.
+- `TavlaAgentServiceTests` icine bu regresyon icin reflection tabanli test eklendi.
+- Dogrulama: `dotnet test .\TavlaJules.sln -c Release` basarili, 53 test gecti.

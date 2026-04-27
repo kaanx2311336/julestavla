@@ -79,6 +79,55 @@ public class TavlaAgentServiceTests
         Assert.Contains("agent_reports/2026_04_27_12_01_00_agent_report.json", unsafeFiles);
     }
 
+    [Fact]
+    public void TryFindDuplicateCompletedSession_IgnoresSharedTitleWhenObjectiveDiffers()
+    {
+        var tempFolder = Path.Combine(Path.GetTempPath(), $"tavlajules-agent-test-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(tempFolder, "agent_state"));
+            File.WriteAllText(
+                Path.Combine(tempFolder, "agent_state", "tavlajules.json"),
+                """
+                {
+                  "HandledCompletedSessionIds": ["2920587393206689478"],
+                  "AppliedCompletedSessionIds": ["2920587393206689478"],
+                  "SessionObjectiveKeys": {
+                    "8132549434037104748": "online.match-repository",
+                    "2920587393206689478": "online.match-schema"
+                  }
+                }
+                """);
+
+            var settings = new ProjectSettings
+            {
+                AgentName = "tavlajules",
+                ProjectFolder = tempFolder,
+                GitHubRepo = "kaanx2311336/julestavla"
+            };
+            var sessionsOutput = """
+             8132549434037104748     Create the TavlaJules online match phase repository/service work  kaanx2311336/julestavla  Completed
+             2920587393206689478     Create the TavlaJules online match phase schema work              kaanx2311336/julestavla  Completed
+            """;
+
+            var isDuplicate = InvokeTryFindDuplicateCompletedSession(
+                settings,
+                sessionsOutput,
+                "8132549434037104748",
+                out var duplicateOfSessionId);
+
+            Assert.False(isDuplicate);
+            Assert.Equal("", duplicateOfSessionId);
+        }
+        finally
+        {
+            if (Directory.Exists(tempFolder))
+            {
+                Directory.Delete(tempFolder, recursive: true);
+            }
+        }
+    }
+
     private static string InvokeBuildPromptObjectiveKey(string prompt)
     {
         var method = typeof(TavlaAgentService).GetMethod(
@@ -103,6 +152,23 @@ public class TavlaAgentServiceTests
         var result = Assert.IsType<bool>(method.Invoke(null, parameters));
         dirtyFiles = Assert.IsAssignableFrom<IReadOnlyList<string>>(parameters[1]);
         unsafeFiles = Assert.IsAssignableFrom<IReadOnlyList<string>>(parameters[2]);
+        return result;
+    }
+
+    private static bool InvokeTryFindDuplicateCompletedSession(
+        ProjectSettings settings,
+        string sessionsOutput,
+        string trackedSessionId,
+        out string duplicateOfSessionId)
+    {
+        var method = typeof(TavlaAgentService).GetMethod(
+            "TryFindDuplicateCompletedSession",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        Assert.NotNull(method);
+        object?[] parameters = [settings, sessionsOutput, trackedSessionId, null];
+        var result = Assert.IsType<bool>(method.Invoke(new TavlaAgentService(), parameters));
+        duplicateOfSessionId = Assert.IsType<string>(parameters[3]);
         return result;
     }
 }

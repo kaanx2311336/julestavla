@@ -908,6 +908,7 @@ public sealed class TavlaAgentService
     {
         duplicateOfSessionId = "";
         var trackedDescription = NormalizeSessionDescription(TryGetSessionDescription(sessionsOutput, trackedSessionId));
+        var trackedObjectiveKey = ResolveSessionObjectiveKey(settings, sessionsOutput, trackedSessionId);
         if (trackedDescription.Length < 28)
         {
             return false;
@@ -923,6 +924,14 @@ public sealed class TavlaAgentService
         {
             var knownDescription = NormalizeSessionDescription(TryGetSessionDescription(sessionsOutput, sessionId));
             if (knownDescription.Length < 28)
+            {
+                continue;
+            }
+
+            var knownObjectiveKey = ResolveSessionObjectiveKey(settings, sessionsOutput, sessionId);
+            if (!string.IsNullOrWhiteSpace(trackedObjectiveKey)
+                && !string.IsNullOrWhiteSpace(knownObjectiveKey)
+                && !ObjectiveKeysMatch(trackedObjectiveKey, knownObjectiveKey))
             {
                 continue;
             }
