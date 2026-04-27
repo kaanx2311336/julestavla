@@ -1,1 +1,3 @@
-Completed the 'online.match-schema' phase by adding idempotent MySQL table definitions for online_matches and online_match_players to migrations/002_online_match_schema.sql. Added a corresponding summary in prodetayi/online_match_schema.md.
+Completed the `online.match-schema` phase by adding idempotent MySQL table definitions for `online_matches` and `online_match_players` to `migrations/002_online_match_schema.sql`.
+
+Project memory was recorded in `prodetayi/online_match_schema.txt`. This phase is schema-only; repository/service code remains the next online phase.

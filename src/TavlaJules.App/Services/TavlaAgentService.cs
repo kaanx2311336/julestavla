@@ -2702,6 +2702,7 @@ public sealed class TavlaAgentService
         GenerateLegalMoves ve dice/turn isleri done ise sonraki dogru oyun fazi full-turn move sequence generation, sonra game state snapshot, sonra MySQL schema, sonra MySQL repository, sonra MySQL app integration, sonra WinForms board skeleton, local turn flow, persistence smoke action, online match schema, online match repository/service, online matchmaking UI, local AI opponent ve board polish olmalidir.
         MySQL integration dahil tum DB fazlari done ise nextPrompt null yazma; OYUN FAZ DURUMU icindeki ilk missing app/online/gameplay fazini sec.
         nextPrompt mutlaka dosya/modul bazli, test/dogrulama beklentili, 100-500 satir bandinda ve mevcut prodetayi/yapilanlar disiplinine uygun olsun.
+        Jules gorevlerinde `prodetayi/` guncellemelerinin `.txt` dosyasi olmasini acikca iste; bu proje hafizasi icin `.md` dosyasi olusturulmamali.
         Proje, kullanicinin daha once yaptigi Batak projesine benzer sekilde fazli, loglu, prodetayi hafizali ve Jules destekli ilerlemelidir.
         Batak yalnizca surec disiplini ornegidir; cevapta Batak, FAZ 95 veya baska eski proje icerigi yazma.
         Konu sadece TavlaJules, tavla oyunu, Jules sessionlari ve ajanlarim SQL raporlamasidir.

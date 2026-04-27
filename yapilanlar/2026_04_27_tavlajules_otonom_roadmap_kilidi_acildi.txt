@@ -12,6 +12,7 @@ Yapilan degisiklikler:
 - Online fazlarda App katmani degisiklikleri yanlis hedef sayilmasin diye completed patch hedef kontrolu guncellendi.
 - Completed Jules patch apply oncesinde dirty workspace gorulurse, `PendingAppliedSessionId` olmasa bile guvenli otomasyon dosyalari build/test ve secret scan sonrasi commit/push edilecek sekilde toparlama akisi eklendi.
 - `.env`, agent raporlari/state, publish/bin/obj, appsettings ve secret adli dosyalar otomatik toparlama disinda birakildi; boylece guvenli olmayan kirli alanlarda apply hala durur.
+- OpenRouter sistem promptu Jules'e `prodetayi/` hafiza guncellemelerinin `.txt` olmasini acikca soyleyecek sekilde guclendirildi.
 - `src/TavlaJules.Engine.Tests/Services/TavlaAgentServiceTests.cs` eklendi ve siniflandirma regresyonu testle kilitlendi.
 - Dirty-workspace auto-save kabul/red davranisi icin iki regresyon testi eklendi.
 

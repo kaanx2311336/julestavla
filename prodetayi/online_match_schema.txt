@@ -1,0 +1,7 @@
+`migrations/002_online_match_schema.sql`, TavlaJules online mac oturumlari icin MySQL sema fazini ekler.
+
+- `online_matches` tablosu her online mac oturumunu `id`, `status`, opsiyonel `current_snapshot_id`, `created_at` ve `updated_at` alanlariyla tutar.
+- `online_match_players` tablosu maca katilan oyunculari `match_id`, `player_id`, `player_name`, `color_assignment`, `created_at` ve `updated_at` alanlariyla tutar.
+- `online_match_players.match_id`, `online_matches.id` alanina `ON DELETE CASCADE` foreign key ile baglidir.
+- Sema MySQL uyumludur; PostgreSQL, JSONB, EF Core, Docker veya secret degeri icermez.
+- Bu faz yalnizca sema hazirligidir. Sonraki faz `online.match-repository` olup bu tablolara erisecek C# repository/service katmanini eklemelidir.
